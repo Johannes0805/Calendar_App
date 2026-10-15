@@ -48,12 +48,12 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             to = selectedDate
         }else if(currentView == CalendarView.WEEK){
             var dayOfWeek= selectedDate.dayOfWeek.value.toLong()
-            from = selectedDate.minusDays(dayOfWeek - 1)
-            to = selectedDate.plusDays(8 - dayOfWeek)
+            from = selectedDate.minusDays(dayOfWeek)
+            to = selectedDate.plusDays(7 - dayOfWeek)
         }else{
             var dayofMonth = selectedDate.dayOfMonth.toLong()
             from = selectedDate.minusDays(dayofMonth - 1)
-            to = selectedDate.plusDays(selectedDate.lengthOfMonth() - dayofMonth + 1)
+            to = selectedDate.plusDays(selectedDate.lengthOfMonth() - dayofMonth)
         }
 
 

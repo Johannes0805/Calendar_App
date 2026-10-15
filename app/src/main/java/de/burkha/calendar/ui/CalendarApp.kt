@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.burkha.calendar.data.CalendarRepository
 import de.burkha.calendar.ui.day.DayScreen
+import de.burkha.calendar.ui.month.MonthScreen
+import de.burkha.calendar.ui.week.WeekScreen
 
 @Composable
 fun CalendarApp(repository: CalendarRepository){
@@ -22,7 +24,21 @@ fun CalendarApp(repository: CalendarRepository){
             {},
             viewSwitcher = switcher
         )
-        CalendarView.WEEK -> ComingSoonScreen("Platzhalter")
-        CalendarView.MONTH -> ComingSoonScreen("Platzhalter")
+        CalendarView.WEEK -> WeekScreen(
+            viewModel.selectedDate,
+            viewModel.events,
+            {x -> viewModel.selectDate(x)},
+            {},
+            {},
+            viewSwitcher = switcher
+        )
+        CalendarView.MONTH -> MonthScreen(
+            viewModel.selectedDate,
+            viewModel.events,
+            {x -> viewModel.selectDate(x)},
+            {},
+            {},
+            viewSwitcher = switcher
+        )
     }
 }
