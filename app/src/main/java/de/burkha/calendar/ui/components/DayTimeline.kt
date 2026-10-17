@@ -27,13 +27,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.ui.theme.CalendarTheme
@@ -62,6 +67,7 @@ fun DayTimeline(
     onEventClick: (CalendarEvent) -> Unit,
     modifier: Modifier = Modifier,
     now: LocalDateTime = LocalDateTime.now(),
+    highlightEventId: Long? = null,   // dieser Termin bekommt einen gestrichelten Rahmen (z. B. im Editor)
 ) {
     val dayEvents = remember(events, day) { events.filter { overlapsDay(it, day) } }
     val allDayEvents = dayEvents.filter { it.allDay }
@@ -76,7 +82,12 @@ fun DayTimeline(
         }
         timeline.forEach { entry ->
             when (entry) {
-                is TimelineItem.Event -> EventRow(entry.event, entry.state, onEventClick)
+                is TimelineItem.Event -> EventRow(
+                    event = entry.event,
+                    state = entry.state,
+                    highlighted = entry.event.id == highlightEventId,
+                    onClick = onEventClick,
+                )
                 is TimelineItem.Gap -> GapRow(entry.minutes)
                 is TimelineItem.Now -> NowRow(entry.time)
                 is TimelineItem.FreeFrom -> FreeFromRow(entry.time)
@@ -91,6 +102,9 @@ fun DayTimeline(
  *
  * Tipp: Gib dem Bildschirm dahinter dieselbe Farbe (surfaceContainerLow).
  * Dann geht das Blatt nahtlos bis nach unten, auch wenn wenig drin steht.
+ *
+ * @param title             eigene Überschrift. null = "Mi, 14. Oktober"
+ * @param highlightEventId  wird an DayTimeline weitergereicht
  */
 @Composable
 fun DaySheet(
@@ -99,6 +113,8 @@ fun DaySheet(
     onEventClick: (CalendarEvent) -> Unit,
     modifier: Modifier = Modifier,
     now: LocalDateTime = LocalDateTime.now(),
+    title: String? = null,
+    highlightEventId: Long? = null,
 ) {
     val minutes = remember(events, date) { plannedMinutes(date, events) }
     val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.GERMAN).take(2)
@@ -124,7 +140,7 @@ fun DaySheet(
             verticalAlignment = Alignment.Bottom,
         ) {
             Text(
-                text = "$weekday, ${date.format(DAY_MONTH_FORMAT)}" + if (isToday) " · Heute" else "",
+                text = title ?: ("$weekday, ${date.format(DAY_MONTH_FORMAT)}" + if (isToday) " · Heute" else ""),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
@@ -135,7 +151,13 @@ fun DaySheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        DayTimeline(day = date, events = events, onEventClick = onEventClick, now = now)
+        DayTimeline(
+            day = date,
+            events = events,
+            onEventClick = onEventClick,
+            now = now,
+            highlightEventId = highlightEventId,
+        )
     }
 }
 
@@ -144,18 +166,28 @@ fun DaySheet(
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun EventRow(event: CalendarEvent, state: EventState, onClick: (CalendarEvent) -> Unit) {
+private fun EventRow(
+    event: CalendarEvent,
+    state: EventState,
+    highlighted: Boolean,
+    onClick: (CalendarEvent) -> Unit,
+) {
     val eventColor = Color(event.color)
     val container = lerp(MaterialTheme.colorScheme.surface, eventColor, 0.25f)
     val shape = RoundedCornerShape(18.dp)
     val details = "${event.start.format(TIME_FORMAT)} – ${event.end.format(TIME_FORMAT)}" +
         (event.location?.let { " · $it" } ?: "")
+    val frame = when {
+        highlighted -> Modifier.dashedBorder(eventColor, 18.dp)
+        state == EventState.RUNNING -> Modifier.border(2.dp, eventColor, shape)
+        else -> Modifier
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .alpha(if (state == EventState.PAST) 0.55f else 1f),
+            .alpha(if (state == EventState.PAST && !highlighted) 0.55f else 1f),
     ) {
         TimeLabel(text = event.start.format(TIME_FORMAT), modifier = Modifier.padding(top = 14.dp))
         Rail(dotColor = eventColor, dashed = false)
@@ -164,7 +196,7 @@ private fun EventRow(event: CalendarEvent, state: EventState, onClick: (Calendar
             modifier = Modifier
                 .weight(1f)
                 .padding(bottom = 8.dp)
-                .then(if (state == EventState.RUNNING) Modifier.border(2.dp, eventColor, shape) else Modifier)
+                .then(frame)
                 .clip(shape)
                 .background(container)
                 .clickable { onClick(event) }
@@ -333,6 +365,26 @@ private fun TimeLabel(text: String, modifier: Modifier = Modifier, muted: Boolea
         modifier = modifier
             .width(TIME_COLUMN_WIDTH)
             .padding(end = 10.dp),
+    )
+}
+
+/**
+ * Gestrichelter Rahmen. Compose hat keinen fertigen, also malen wir ihn selbst:
+ * drawWithContent = erst den normalen Inhalt zeichnen (drawContent), dann den Rahmen obendrauf.
+ */
+private fun Modifier.dashedBorder(color: Color, radius: Dp): Modifier = drawWithContent {
+    drawContent()
+    val stroke = 2.dp.toPx()
+    drawRoundRect(
+        color = color,
+        // um die halbe Strichbreite nach innen, sonst wird die Hälfte der Linie abgeschnitten
+        topLeft = Offset(stroke / 2, stroke / 2),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(radius.toPx()),
+        style = Stroke(
+            width = stroke,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx())),
+        ),
     )
 }
 

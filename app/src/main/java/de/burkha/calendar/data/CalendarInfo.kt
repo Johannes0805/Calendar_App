@@ -8,4 +8,5 @@ data class CalendarInfo(
     val color: Int,
     val accountName: String,
     val isVisible: Boolean,
+    var canWrite: Boolean = true,
 )

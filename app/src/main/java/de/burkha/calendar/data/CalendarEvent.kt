@@ -9,7 +9,9 @@ data class CalendarEvent(
     var start: LocalDateTime,
     var end: LocalDateTime,
     var allDay: Boolean,
-    var location: String?,
-    var color: Int
+    var location: String? = null,
+    var color: Int,
+    var description: String? = null,
+    var isRecurring: Boolean = false
 )
 
