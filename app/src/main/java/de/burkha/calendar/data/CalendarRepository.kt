@@ -90,10 +90,10 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
                         .toLocalDateTime()
                 }else{
                     start = Instant.ofEpochMilli(c.getLong(3))
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(systemDefault())
                         .toLocalDateTime()
                     end = Instant.ofEpochMilli(c.getLong(4))
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(systemDefault())
                         .toLocalDateTime()
                 }
 

@@ -2,10 +2,18 @@
 
 ## WIP
 
+- Lock recurring Events for editing
+
 ## TODO
 
 - Add a tutorial when you first start the app
-- Add dark mode
+- Add Settings
+	- Add dark mode
+	- Change the Calendars shown
+	- 
+- Add View for clicking an Event without editing
+- Add notifications bevor Event
+- Add Widget
 
 
 ## Setup Guide
