@@ -20,7 +20,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -116,10 +123,6 @@ fun DaySheet(
     title: String? = null,
     highlightEventId: Long? = null,
 ) {
-    val minutes = remember(events, date) { plannedMinutes(date, events) }
-    val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.GERMAN).take(2)
-    val isToday = date == now.toLocalDate()
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -132,31 +135,56 @@ fun DaySheet(
             )
             .padding(start = 12.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 8.dp, bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(
-                text = title ?: ("$weekday, ${date.format(DAY_MONTH_FORMAT)}" + if (isToday) " · Heute" else ""),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = if (minutes > 0) "${formatHours(minutes)} verplant" else "frei",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        DayHeading(
+            date = date,
+            events = events,
+            now = now,
+            title = title,
+            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
+        )
         DayTimeline(
             day = date,
             events = events,
             onEventClick = onEventClick,
             now = now,
             highlightEventId = highlightEventId,
+        )
+    }
+}
+
+/**
+ * Überschrift über einem Tag: links "Mi, 14. Oktober · Heute", rechts "4,5 h verplant".
+ * Wird von DaySheet (Woche, Monat) und direkt von der Tagesansicht benutzt.
+ *
+ * @param title  eigene Überschrift statt des Datums (z. B. im Editor)
+ */
+@Composable
+fun DayHeading(
+    date: LocalDate,
+    events: List<CalendarEvent>,
+    modifier: Modifier = Modifier,
+    now: LocalDateTime = LocalDateTime.now(),
+    title: String? = null,
+) {
+    val minutes = remember(events, date) { plannedMinutes(date, events) }
+    val weekday = date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.GERMAN).take(2)
+    val isToday = date == now.toLocalDate()
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text(
+            text = title ?: ("$weekday, ${date.format(DAY_MONTH_FORMAT)}" + if (isToday) " · Heute" else ""),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = if (minutes > 0) "${formatHours(minutes)} verplant" else "frei",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -254,7 +282,7 @@ private fun GapRow(minutes: Long) {
 
 @Composable
 private fun NowRow(time: LocalTime) {
-    val red = MaterialTheme.colorScheme.error
+    val red = nowColor()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -272,12 +300,7 @@ private fun NowRow(time: LocalTime) {
                 .padding(end = 10.dp),
         )
         Box(modifier = Modifier.width(16.dp), contentAlignment = Alignment.Center) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(red),
-            )
+            PulsingDot(color = red, dotSize = 12.dp)
         }
         Box(
             modifier = Modifier
@@ -294,6 +317,49 @@ private fun NowRow(time: LocalTime) {
         )
     }
 }
+
+/**
+ * Der "Jetzt"-Punkt mit einem ganz leichten Puls: Ein blasser Ring wächst langsam aus dem Punkt
+ * heraus und verblasst dabei, dann eine kurze Pause, dann von vorn.
+ *
+ * Zum Feintunen: PULSE_* unten. Größer/kräftiger = auffälliger.
+ */
+@Composable
+private fun PulsingDot(color: Color, dotSize: Dp) {
+    // Eine Animation, die nie aufhört. progress läuft immer wieder von 0 nach 1.
+    val transition = rememberInfiniteTransition(label = "jetzt")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            // erst schnell, dann sanft auslaufend. delayMillis = Pause vor jedem neuen Puls
+            animation = tween(durationMillis = PULSE_DURATION_MS, delayMillis = PULSE_PAUSE_MS, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "puls",
+    )
+
+    Box(
+        modifier = Modifier
+            .size(dotSize)
+            // Der Ring wird HINTER den Punkt gemalt. drawBehind steht vor clip,
+            // deshalb darf der Ring über den Punkt hinausragen.
+            .drawBehind {
+                val radius = size.minDimension / 2
+                drawCircle(
+                    color = color.copy(alpha = PULSE_START_ALPHA * (1f - progress)),
+                    radius = radius * (1f + (PULSE_MAX_SCALE - 1f) * progress),
+                )
+            }
+            .clip(CircleShape)
+            .background(color),
+    )
+}
+
+private const val PULSE_DURATION_MS = 1800   // wie lange ein Puls dauert
+private const val PULSE_PAUSE_MS = 900       // Ruhe zwischen zwei Pulsen
+private const val PULSE_START_ALPHA = 0.28f  // wie kräftig der Ring am Anfang ist (0..1)
+private const val PULSE_MAX_SCALE = 2.3f     // wie groß der Ring am Ende wird (x Punktgröße)
 
 @Composable
 private fun FreeFromRow(time: LocalTime) {

@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.ui.CalendarView
 import de.burkha.calendar.ui.ViewSwitcher
-import de.burkha.calendar.ui.components.ChevronButton
+import de.burkha.calendar.ui.components.CalendarHeader
 import de.burkha.calendar.ui.components.DaySheet
 import de.burkha.calendar.ui.components.PlusIcon
 import de.burkha.calendar.ui.components.StatTile
@@ -109,10 +109,12 @@ fun MonthScreen(
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(bottom = 16.dp),
             ) {
-                MonthHeader(
-                    month = month,
+                CalendarHeader(
+                    date = selectedDate,
                     onPrevious = { onSelectDate(selectedDate.minusMonths(1)) },
                     onNext = { onSelectDate(selectedDate.plusMonths(1)) },
+                    previousLabel = "Vorheriger Monat",
+                    nextLabel = "Nächster Monat",
                     action = viewSwitcher,
                     modifier = Modifier.statusBarsPadding(),
                 )
@@ -159,51 +161,6 @@ fun MonthScreen(
 // ---------------------------------------------------------------------------
 // Kopf
 // ---------------------------------------------------------------------------
-
-@Composable
-private fun MonthHeader(
-    month: YearMonth,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    action: (@Composable () -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = month.year.toString(),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                ChevronButton(pointsLeft = true, label = "Vorheriger Monat", onClick = onPrevious)
-                ChevronButton(pointsLeft = false, label = "Nächster Monat", onClick = onNext)
-            }
-            Text(
-                text = month.month.getDisplayName(TextStyle.FULL, Locale.GERMAN),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        if (action != null) {
-            Box(
-                modifier = Modifier
-                    .width(180.dp)
-                    .padding(bottom = 2.dp),
-            ) {
-                action()
-            }
-        }
-    }
-}
 
 @Composable
 private fun WeekdayRow() {

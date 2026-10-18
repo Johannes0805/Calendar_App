@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
 
 
         setContent {
-            CalendarTheme {
+            CalendarTheme(dynamicColor = false) {
                 CalendarPermission {
                         CalendarApp(repository)
                     }

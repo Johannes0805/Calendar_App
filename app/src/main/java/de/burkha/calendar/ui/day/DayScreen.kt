@@ -40,7 +40,8 @@ import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.ui.CalendarView
 import de.burkha.calendar.ui.ViewSwitcher
-import de.burkha.calendar.ui.components.DAY_MONTH_FORMAT
+import de.burkha.calendar.ui.components.CalendarHeader
+import de.burkha.calendar.ui.components.DayHeading
 import de.burkha.calendar.ui.components.DayTimeline
 import de.burkha.calendar.ui.components.PlusIcon
 import de.burkha.calendar.ui.components.TIME_FORMAT
@@ -90,9 +91,12 @@ fun DayScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // statusBarsPadding: Abstand zur Statusleiste (Uhrzeit, Netz), weil die App edge-to-edge zeichnet.
-            DayHeader(
+            CalendarHeader(
                 date = selectedDate,
-                isToday = isToday,
+                onPrevious = { onSelectDate(selectedDate.minusDays(1)) },
+                onNext = { onSelectDate(selectedDate.plusDays(1)) },
+                previousLabel = "Vorheriger Tag",
+                nextLabel = "Nächster Tag",
                 action = viewSwitcher,
                 modifier = Modifier.statusBarsPadding(),
             )
@@ -108,6 +112,15 @@ fun DayScreen(
                 LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 20.dp, top = 20.dp, bottom = 104.dp + navBarBottom),
                 ) {
+                    // Das Datum steht hier statt oben im Kopf, genau wie in Woche und Monat
+                    item {
+                        DayHeading(
+                            date = selectedDate,
+                            events = events,
+                            now = now,
+                            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
+                        )
+                    }
                     if (isToday) {
                         item {
                             FocusCard(
@@ -146,47 +159,6 @@ fun DayScreen(
 // ---------------------------------------------------------------------------
 // Kopf und Wochenstreifen
 // ---------------------------------------------------------------------------
-
-@Composable
-private fun DayHeader(
-    date: LocalDate,
-    isToday: Boolean,
-    action: (@Composable () -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    val weekday = date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.GERMAN)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = if (isToday) "$weekday · Heute" else weekday,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = date.format(DAY_MONTH_FORMAT),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        if (action != null) {
-            // Rechts neben dem Datum, auf Höhe der Datumszeile
-            Box(
-                modifier = Modifier
-                    .width(180.dp)
-                    .padding(bottom = 2.dp),
-            ) {
-                action()
-            }
-        }
-    }
-}
 
 @Composable
 private fun WeekStrip(selected: LocalDate, today: LocalDate, onSelectDate: (LocalDate) -> Unit) {

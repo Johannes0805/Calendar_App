@@ -40,17 +40,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.ui.CalendarView
 import de.burkha.calendar.ui.ViewSwitcher
-import de.burkha.calendar.ui.components.ChevronButton
+import de.burkha.calendar.ui.components.CalendarHeader
 import de.burkha.calendar.ui.components.DaySheet
 import de.burkha.calendar.ui.components.PlusIcon
 import de.burkha.calendar.ui.components.StatTile
 import de.burkha.calendar.ui.components.formatHours
+import de.burkha.calendar.ui.components.nowColor
 import de.burkha.calendar.ui.components.overlapsDay
 import de.burkha.calendar.ui.components.plannedMinutes
 import de.burkha.calendar.ui.theme.CalendarTheme
@@ -109,14 +109,17 @@ fun WeekScreen(
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(bottom = 16.dp),
             ) {
-                WeekHeader(
-                    monday = monday,
+                CalendarHeader(
+                    date = selectedDate,
                     onPrevious = { onSelectDate(selectedDate.minusWeeks(1)) },
                     onNext = { onSelectDate(selectedDate.plusWeeks(1)) },
+                    previousLabel = "Vorherige Woche",
+                    nextLabel = "Nächste Woche",
                     action = viewSwitcher,
                     modifier = Modifier.statusBarsPadding(),
                 )
-                HourTicks()
+                // Kalenderwoche nach ISO (Woche beginnt Montag, so wie in Deutschland üblich)
+                HourTicks(weekNumber = monday.get(WeekFields.ISO.weekOfWeekBasedYear()))
                 Column(
                     modifier = Modifier.padding(horizontal = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -165,75 +168,21 @@ fun WeekScreen(
 // Kopf
 // ---------------------------------------------------------------------------
 
+/** Links "KW 42", daneben die kleinen Uhrzeiten (8, 12, 16, 20) über den Balken. */
 @Composable
-private fun WeekHeader(
-    monday: LocalDate,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit,
-    action: (@Composable () -> Unit)?,
-    modifier: Modifier = Modifier,
-) {
-    val sunday = monday.plusDays(6)
-    // Kalenderwoche nach ISO (Woche beginnt Montag, so wie in Deutschland üblich)
-    val weekNumber = monday.get(WeekFields.ISO.weekOfWeekBasedYear())
-    // Woche liegt in einem Monat -> "Oktober". Über zwei Monate -> "Okt. – Nov."
-    val title = if (monday.month == sunday.month) {
-        monday.month.getDisplayName(TextStyle.FULL, Locale.GERMAN)
-    } else {
-        monday.month.getDisplayName(TextStyle.SHORT, Locale.GERMAN) + " – " +
-            sunday.month.getDisplayName(TextStyle.SHORT, Locale.GERMAN)
-    }
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "KW $weekNumber · ${monday.dayOfMonth}.–${sunday.dayOfMonth}.",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    // fill = false: nimmt nur so viel Platz wie nötig, wird aber gekürzt, bevor die Pfeile rausfallen
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                Spacer(modifier = Modifier.width(2.dp))
-                ChevronButton(pointsLeft = true, label = "Vorherige Woche", onClick = onPrevious)
-                ChevronButton(pointsLeft = false, label = "Nächste Woche", onClick = onNext)
-            }
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        }
-        if (action != null) {
-            Box(
-                modifier = Modifier
-                    .width(180.dp)
-                    .padding(bottom = 2.dp),
-            ) {
-                action()
-            }
-        }
-    }
-}
-
-/** Die kleinen Uhrzeiten (8, 12, 16, 20) über den Balken. */
-@Composable
-private fun HourTicks() {
+private fun HourTicks(weekNumber: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
     ) {
-        Spacer(modifier = Modifier.width(DAY_LABEL_WIDTH))
+        Text(
+            text = "KW $weekNumber",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.width(DAY_LABEL_WIDTH),
+        )
         // BoxWithConstraints verrät uns die echte Breite (maxWidth), damit wir die Zahlen
         // an der richtigen Stelle über dem Balken platzieren können.
         BoxWithConstraints(
@@ -346,7 +295,7 @@ private fun DayBar(
 ) {
     val segments = remember(events, day) { barSegments(day, events) }
     val nowFraction = fractionOfBar(day, now)
-    val nowColor = MaterialTheme.colorScheme.error
+    val nowLineColor = nowColor()
 
     Box(
         modifier = modifier
@@ -364,7 +313,7 @@ private fun DayBar(
                 }
                 if (isToday) {
                     val x = size.width * nowFraction
-                    drawLine(nowColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2.dp.toPx())
+                    drawLine(nowLineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 2.dp.toPx())
                 }
             },
     )

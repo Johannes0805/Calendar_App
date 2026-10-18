@@ -18,12 +18,25 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+
+/**
+ * Farbe für alles, was "jetzt" markiert: Punkt und Linie im Zeitstrahl, Strich im Wochenbalken.
+ * Ein etwas weicheres, moderneres Rot als das Fehler-Rot von Material.
+ * Hier an EINER Stelle ändern, dann ändert es sich überall.
+ */
+@Composable
+fun nowColor(): Color {
+    // Dunkles Theme erkennt man an einem dunklen Hintergrund
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    return if (isDark) Color(0xFFFF6369) else Color(0xFFE5484D)
+}
 
 /** Plus-Symbol für den Button "Neuer Termin". Gezeichnet, damit keine Icon-Bibliothek nötig ist. */
 @Composable
