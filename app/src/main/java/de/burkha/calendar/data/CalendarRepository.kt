@@ -7,6 +7,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.CalendarContract
 import android.util.Log
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.collections.mutableListOf
@@ -60,7 +61,8 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
             CalendarContract.Instances.EVENT_LOCATION,
             CalendarContract.Instances.DISPLAY_COLOR,
             CalendarContract.Instances.DESCRIPTION,
-            CalendarContract.Instances.RRULE
+            CalendarContract.Instances.RRULE,
+            CalendarContract.Instances.ORIGINAL_ID
         )
 
         val beginWindow: Long = from.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -97,6 +99,8 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
                         .toLocalDateTime()
                 }
 
+                val recurring: Boolean = !c.getString(9).isNullOrBlank() || !c.getString(10).isNullOrBlank()
+
                 result.add(
                     CalendarEvent(
                         c.getLong(0),
@@ -108,7 +112,7 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
                         if (c.getString(6).isNullOrBlank()){null} else {c.getString(6)},
                         c.getInt(7),
                         if (c.getString(8).isNullOrBlank()) {null} else {c.getString(8)},
-                        c.getInt(9) == 1
+                        recurring
                     )
                 )
             }
@@ -130,7 +134,7 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
     fun updateEvent(draft: EventDraft): Boolean{
         val conValue = toContentValues(draft)
         val id = draft.id
-        if (id== null){
+        if (id == null){
             return false
         }else{
             val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id)
@@ -144,15 +148,72 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
         contentResolver.delete(uri, null)
     }
 
+    fun insertException(seriesId: Long, originalStart: LocalDateTime, allDay: Boolean, draft: EventDraft): Boolean{
+        val values = toContentValues(draft)
+        values.remove(CalendarContract.Events.DTEND)
+        values.remove(CalendarContract.Events.CALENDAR_ID)
+        values.remove(CalendarContract.Events.RRULE)
+        values.put(CalendarContract.Events.DURATION,
+            if (!draft.allDay){
+                "P${draft.duration.seconds}S"
+            }else{
+                "P${draft.duration.toDays()}D"
+            }
+        )
+        values.put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, toMillis(allDay, originalStart))
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, seriesId)
+        val result = contentResolver.insert(uri, values)
+        return result != null
+    }
+
+    fun cancelInstance(seriesId: Long, originalStart: LocalDateTime, allDay: Boolean): Boolean{
+        val values = ContentValues()
+
+        values.remove(CalendarContract.Events.DTEND)
+        values.remove(CalendarContract.Events.CALENDAR_ID)
+        values.remove(CalendarContract.Events.RRULE)
+
+        values.put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, toMillis(allDay, originalStart))
+        values.put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CANCELED)
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, seriesId)
+        val result = contentResolver.insert(uri, values)
+        return result != null
+    }
+
     // Helfer für insert und update
     private fun toContentValues(draft: EventDraft): ContentValues {
 
         val values: ContentValues = ContentValues()
 
+        if (draft.recurrence == Recurrence.NONE){
+            values.put(CalendarContract.Events.DTEND, toMillis(draft.allDay, draft.end))
+            values.putNull(CalendarContract.Events.RRULE)
+            values.putNull(CalendarContract.Events.DURATION)
+        } else{
+            values.put(
+                CalendarContract.Events.RRULE,
+                when (draft.recurrence){
+                    Recurrence.DAILY -> "DAILY"
+                    Recurrence.WEEKLY -> "WEEKLY"
+                    Recurrence.MONTHLY -> "MONTHLY"
+                    Recurrence.YEARLY -> "YEARLY"
+                    else -> ""
+                }
+            )
+            values.put(CalendarContract.Events.DURATION,
+                if (!draft.allDay){
+                    "P${draft.duration.seconds}S"
+                }else{
+                    "P${draft.duration.toDays()}D"
+                }
+            )
+            values.putNull(CalendarContract.Events.DTEND)
+        }
+
         values.put(CalendarContract.Events.CALENDAR_ID, draft.calendarId)
         values.put(CalendarContract.Events.TITLE, draft.title)
         values.put(CalendarContract.Events.DTSTART, toMillis(draft.allDay, draft.start))
-        values.put(CalendarContract.Events.DTEND, toMillis(draft.allDay, draft.end))
+        // values.put(CalendarContract.Events.DTEND, toMillis(draft.allDay, draft.end))
         values.put(CalendarContract.Events.ALL_DAY, if (draft.allDay) 1 else 0)
         values.put(CalendarContract.Events.EVENT_LOCATION, draft.location)
         values.put(CalendarContract.Events.DESCRIPTION, draft.note)

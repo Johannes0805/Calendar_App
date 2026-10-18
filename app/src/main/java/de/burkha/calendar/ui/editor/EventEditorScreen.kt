@@ -28,9 +28,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,11 +63,14 @@ import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.data.CalendarInfo
 import de.burkha.calendar.data.EventDraft
+import de.burkha.calendar.data.Recurrence
 import de.burkha.calendar.ui.components.DaySheet
 import de.burkha.calendar.ui.components.TIME_FORMAT
 import de.burkha.calendar.ui.theme.CalendarTheme
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.Period
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.time.format.TextStyle as DateTextStyle
 
@@ -75,8 +82,12 @@ import java.time.format.TextStyle as DateTextStyle
  *
  * @param dayEvents  Termine an dem Tag, für die Vorschau unten. Der bearbeitete Termin selbst darf
  *                   dabei sein, er wird durch den Entwurf ersetzt.
- * @param onDelete   null = kein Löschen-Knopf (z. B. bei neuen Terminen)
- * @param locked     true = wiederholender Termin. Dann ist alles nur zum Ansehen.
+ * @param onSave       "Speichern" gedrückt. Bei Serien erst nach der Frage "Nur diesen / Alle",
+ *                     die Antwort steckt im EditScope. Bei normalen Terminen immer ALL.
+ * @param onDelete     wie onSave, nur fürs Löschen. null = kein Löschen-Knopf (z. B. bei neuen Terminen)
+ * @param isRecurring  true = der Termin gehört zu einer Serie. Dann wird beim Speichern/Löschen
+ *                     nachgefragt, und Kalender und Wiederholung lassen sich nicht ändern.
+ * @param locked       true = alles nur zum Ansehen (z. B. für Kalender ohne Schreibrecht)
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -85,10 +96,11 @@ fun EventEditorScreen(
     calendars: List<CalendarInfo>,
     dayEvents: List<CalendarEvent>,
     onDraftChange: (EventDraft) -> Unit,
-    onSave: () -> Unit,
+    onSave: (EditScope) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    onDelete: (() -> Unit)? = null,
+    onDelete: ((EditScope) -> Unit)? = null,
+    isRecurring: Boolean = false,
     locked: Boolean = false,
     now: LocalDateTime = LocalDateTime.now(),
 ) {
@@ -97,7 +109,11 @@ fun EventEditorScreen(
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     var showCalendarMenu by remember { mutableStateOf(false) }
+    var showRecurrenceMenu by remember { mutableStateOf(false) }
+    var showRecurrenceEndMenu by remember { mutableStateOf(false) }
+    var showRecurrenceEndPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showSaveScope by remember { mutableStateOf(false) }
     var noteOpen by remember { mutableStateOf(draft.note.isNotEmpty()) }
 
     val enabled = !locked
@@ -119,7 +135,8 @@ fun EventEditorScreen(
         EditorTopBar(
             canSave = enabled && draft.title.isNotBlank() && draft.calendarId != null,
             showSave = enabled,
-            onSave = onSave,
+            // Bei Serien erst fragen, sonst direkt speichern
+            onSave = { if (isRecurring) showSaveScope = true else onSave(EditScope.ALL) },
             onClose = onClose,
         )
 
@@ -196,7 +213,8 @@ fun EventEditorScreen(
                         Box {
                             SentenceChip(
                                 text = calendar?.name ?: "wählen",
-                                enabled = enabled,
+                                // Einen einzelnen Serientermin kann man nicht in einen anderen Kalender legen
+                                enabled = enabled && !isRecurring,
                                 onClick = { showCalendarMenu = true },
                                 dotColor = calendar?.let { Color(it.color) },
                                 containerColor = lerp(MaterialTheme.colorScheme.surface, calendarColor, 0.25f),
@@ -207,6 +225,87 @@ fun EventEditorScreen(
                                 onPick = { onDraftChange(draft.copy(calendarId = it.id)) },
                                 onDismiss = { showCalendarMenu = false },
                             )
+                        }
+                    }
+                    if (isRecurring) {
+                        // Die Regel einer bestehenden Serie ändern wir (noch) nicht, nur Hinweis
+                        Word("gehört zu einer Serie")
+                    } else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        // "wiederholt sich jeden Mittwoch"
+                        Word("wiederholt sich", Modifier.align(Alignment.CenterVertically))
+                        Box {
+                            SentenceChip(
+                                text = recurrenceLabel(draft.recurrence, day),
+                                enabled = enabled,
+                                onClick = { showRecurrenceMenu = true },
+                            )
+                            DropdownMenu(
+                                expanded = showRecurrenceMenu,
+                                onDismissRequest = { showRecurrenceMenu = false },
+                            ) {
+                                // entries = alle Werte des enums, in der Reihenfolge, in der sie dort stehen
+                                Recurrence.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(recurrenceLabel(option, day)) },
+                                        onClick = {
+                                            // Bei "nie" und "jährlich" gibt es kein Ende-Feld, also Ende zurücksetzen,
+                                            // damit nicht unsichtbar ein altes Enddatum mitgespeichert wird
+                                            val keepEnd = endPresets(option).isNotEmpty()
+                                            onDraftChange(
+                                                draft.copy(
+                                                    recurrence = option,
+                                                    recurrenceEnd = if (keepEnd) draft.recurrenceEnd else null,
+                                                ),
+                                            )
+                                            showRecurrenceMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    // "endet am 21. April 2027" (nur bei täglich, wöchentlich, monatlich)
+                    val presets = endPresets(draft.recurrence)
+                    if (!isRecurring && presets.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Word("endet", Modifier.align(Alignment.CenterVertically))
+                            Box {
+                                SentenceChip(
+                                    text = draft.recurrenceEnd?.let { "am " + it.format(LONG_DATE_FORMAT) } ?: "nie",
+                                    enabled = enabled,
+                                    onClick = { showRecurrenceEndMenu = true },
+                                )
+                                DropdownMenu(
+                                    expanded = showRecurrenceEndMenu,
+                                    onDismissRequest = { showRecurrenceEndMenu = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("nie") },
+                                        onClick = {
+                                            onDraftChange(draft.copy(recurrenceEnd = null))
+                                            showRecurrenceEndMenu = false
+                                        },
+                                    )
+                                    // Schnellauswahl: "6 Monate · bis 21.04.2027"
+                                    presets.forEach { (label, period) ->
+                                        val end = day.plus(period)
+                                        DropdownMenuItem(
+                                            text = { Text("$label · bis ${end.format(SHORT_DATE_FORMAT)}") },
+                                            onClick = {
+                                                onDraftChange(draft.copy(recurrenceEnd = end))
+                                                showRecurrenceEndMenu = false
+                                            },
+                                        )
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text("Datum wählen …") },
+                                        onClick = {
+                                            showRecurrenceEndMenu = false
+                                            showRecurrenceEndPicker = true
+                                        },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -290,7 +389,40 @@ fun EventEditorScreen(
             onDismiss = { showEndPicker = false },
         )
     }
-    if (showDeleteConfirm && onDelete != null) {
+    if (showRecurrenceEndPicker) {
+        DatePickerDialogFor(
+            date = draft.recurrenceEnd ?: day.plusMonths(1),
+            // Ein Ende vor dem ersten Termin ergibt keinen Sinn, dann nehmen wir den ersten Termin selbst
+            onPick = { onDraftChange(draft.copy(recurrenceEnd = maxOf(it, day))) },
+            onDismiss = { showRecurrenceEndPicker = false },
+        )
+    }
+    if (showSaveScope) {
+        ScopeDialog(
+            title = "Wiederholenden Termin ändern",
+            thisLabel = "Nur diesen Termin",
+            allLabel = "Alle Termine der Serie",
+            destructive = false,
+            onPick = { scope ->
+                showSaveScope = false
+                onSave(scope)
+            },
+            onDismiss = { showSaveScope = false },
+        )
+    }
+    if (showDeleteConfirm && onDelete != null && isRecurring) {
+        ScopeDialog(
+            title = "Wiederholenden Termin löschen",
+            thisLabel = "Nur diesen Termin",
+            allLabel = "Alle Termine der Serie",
+            destructive = true,
+            onPick = { scope ->
+                showDeleteConfirm = false
+                onDelete(scope)
+            },
+            onDismiss = { showDeleteConfirm = false },
+        )
+    } else if (showDeleteConfirm && onDelete != null) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Termin löschen?") },
@@ -299,7 +431,7 @@ fun EventEditorScreen(
                 TextButton(
                     onClick = {
                         showDeleteConfirm = false
-                        onDelete()
+                        onDelete(EditScope.ALL)
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 ) { Text("Löschen") }
@@ -312,6 +444,47 @@ fun EventEditorScreen(
 // ---------------------------------------------------------------------------
 // Bausteine
 // ---------------------------------------------------------------------------
+
+/**
+ * Die Frage "Nur diesen oder alle?". Zwei große Knöpfe untereinander statt der üblichen
+ * kleinen Dialog-Knöpfe, damit man nicht aus Versehen den falschen trifft.
+ *
+ * @param destructive  true = Löschen. Dann ist "alle" rot, weil man damit die ganze Serie verliert.
+ */
+@Composable
+private fun ScopeDialog(
+    title: String,
+    thisLabel: String,
+    allLabel: String,
+    destructive: Boolean,
+    onPick: (EditScope) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(
+                    onClick = { onPick(EditScope.THIS) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(thisLabel) }
+                OutlinedButton(
+                    onClick = { onPick(EditScope.ALL) },
+                    colors = if (destructive) {
+                        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    } else {
+                        ButtonDefaults.outlinedButtonColors()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(allLabel) }
+            }
+        },
+        // AlertDialog will einen confirmButton. Unsere "Bestätigung" sind die zwei Knöpfe oben,
+        // hier steht deshalb nur "Abbrechen".
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
+}
 
 @Composable
 private fun EditorTopBar(canSave: Boolean, showSave: Boolean, onSave: () -> Unit, onClose: () -> Unit) {
@@ -414,7 +587,7 @@ private fun LockedHint(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth(),
     ) {
         Text(
-            text = "Das ist ein wiederholender Termin. Bearbeiten kann die App so etwas noch nicht.",
+            text = "Diesen Termin kannst du hier nur ansehen, nicht ändern.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onTertiaryContainer,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -442,6 +615,33 @@ private fun dateLabel(date: LocalDate): String {
     val month = date.month.getDisplayName(DateTextStyle.SHORT, Locale.GERMAN)
     return "$weekday, ${date.dayOfMonth}. $month"
 }
+
+/**
+ * Text für die Wiederholung, passend zum Datum des Termins:
+ * nie / täglich / jeden Mittwoch / jeden Monat am 14. / jedes Jahr am 14. Oktober
+ */
+private fun recurrenceLabel(recurrence: Recurrence, date: LocalDate): String = when (recurrence) {
+    Recurrence.NONE -> "nie"
+    Recurrence.DAILY -> "täglich"
+    Recurrence.WEEKLY -> "jeden " + date.dayOfWeek.getDisplayName(DateTextStyle.FULL, Locale.GERMAN)
+    Recurrence.MONTHLY -> "jeden Monat am ${date.dayOfMonth}."
+    Recurrence.YEARLY -> "jedes Jahr am ${date.dayOfMonth}. " + date.month.getDisplayName(DateTextStyle.FULL, Locale.GERMAN)
+}
+
+/**
+ * Schnellauswahl fürs Serienende, passend zur Wiederholung.
+ * Leere Liste = kein Ende-Feld anzeigen (bei "nie" und "jährlich").
+ * Hier kannst du Optionen ergänzen oder ändern, z. B. "Semesterende".
+ */
+private fun endPresets(recurrence: Recurrence): List<Pair<String, Period>> = when (recurrence) {
+    Recurrence.DAILY -> listOf("1 Woche" to Period.ofWeeks(1), "1 Monat" to Period.ofMonths(1), "3 Monate" to Period.ofMonths(3))
+    Recurrence.WEEKLY -> listOf("1 Monat" to Period.ofMonths(1), "6 Monate" to Period.ofMonths(6), "1 Jahr" to Period.ofYears(1))
+    Recurrence.MONTHLY -> listOf("6 Monate" to Period.ofMonths(6), "1 Jahr" to Period.ofYears(1), "2 Jahre" to Period.ofYears(2))
+    Recurrence.NONE, Recurrence.YEARLY -> emptyList()
+}
+
+private val LONG_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("d. MMMM yyyy", Locale.GERMAN)
+private val SHORT_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.GERMAN)
 
 /** "18:00", oder "Do 01:00", wenn der Termin über Mitternacht geht */
 private fun endLabel(draft: EventDraft): String {
@@ -490,7 +690,25 @@ private fun EventEditorPreview() {
     }
 }
 
-@Preview(name = "Gesperrt (wiederholend)", showBackground = true, widthDp = 390, heightDp = 1000)
+@Preview(name = "Serie", showBackground = true, widthDp = 390, heightDp = 1000)
+@Composable
+private fun EventEditorRecurringPreview() {
+    CalendarTheme(dynamicColor = false) {
+        EventEditorScreen(
+            draft = previewDraft,
+            calendars = previewCalendars,
+            dayEvents = previewDayEvents,
+            onDraftChange = {},
+            onSave = {},
+            onClose = {},
+            onDelete = {},
+            isRecurring = true,
+            now = previewDay.atTime(11, 20),
+        )
+    }
+}
+
+@Preview(name = "Gesperrt", showBackground = true, widthDp = 390, heightDp = 1000)
 @Composable
 private fun EventEditorLockedPreview() {
     CalendarTheme(dynamicColor = false) {

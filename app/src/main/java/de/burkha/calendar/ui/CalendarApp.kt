@@ -1,9 +1,11 @@
 package de.burkha.calendar.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.burkha.calendar.data.CalendarRepository
 import de.burkha.calendar.ui.day.DayScreen
+import de.burkha.calendar.ui.editor.EditScope
 import de.burkha.calendar.ui.editor.EventEditorScreen
 import de.burkha.calendar.ui.editor.QuickAddSheet
 import de.burkha.calendar.ui.month.MonthScreen
@@ -23,10 +25,10 @@ fun CalendarApp(repository: CalendarRepository){
             calendars = viewModel.writableCalendars,
             dayEvents = viewModel.events,
             onDraftChange = {x -> viewModel.updateDraft(x)},
-            onSave = {viewModel.saveDraft()},
+            onSave = {x -> viewModel.saveDraft(x)},
             onClose = {viewModel.closeEditor()},
-            onDelete = {viewModel.deleteDraft()},
-            locked = viewModel.editorLocked
+            onDelete = {x -> viewModel.deleteDraft(x)},
+            isRecurring = viewModel.editorLocked
         )
     }else {
         when (viewModel.currentView) {
@@ -61,8 +63,8 @@ fun CalendarApp(repository: CalendarRepository){
             QuickAddSheet(
                 draft,
                 viewModel.writableCalendars,
-                { x -> viewModel.updateDraft(x) },
-                { viewModel.saveDraft() },
+                {x -> viewModel.updateDraft(x) },
+                {viewModel.saveDraft(EditScope.ALL)},
                 { viewModel.showFullEditor() },
                 { viewModel.closeEditor() }
             )

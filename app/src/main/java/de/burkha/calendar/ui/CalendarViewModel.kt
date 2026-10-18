@@ -3,16 +3,20 @@ package de.burkha.calendar.ui
 import de.burkha.calendar.data.EventDraft
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.data.CalendarInfo
 import de.burkha.calendar.data.CalendarRepository
+import de.burkha.calendar.ui.editor.EditScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 enum class EditorMode { QUICK, FULL }
 
@@ -21,7 +25,7 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
     var selectedDate by mutableStateOf(LocalDate.now())
         private set
 
-    var currentView by mutableStateOf(CalendarView.DAY)
+    var currentView by mutableStateOf(CalendarView.MONTH)
         private set
 
     var events by mutableStateOf<List<CalendarEvent>>(emptyList())
@@ -38,6 +42,9 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
 
     var writableCalendars by mutableStateOf<List<CalendarInfo>>(emptyList())
         private set
+
+    // Date of a recurring event bevor edited, if not edited originalDateRecurring == event.start
+    var originalDateRecurring: LocalDateTime? = null
 
     // Needed in case an existing Event changes Calendar
     var originalCalendarId: Long? = null
@@ -77,7 +84,8 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             location = if(event.location != null) event.location!! else "",
             note = if(event.description != null) event.description!! else "")
         editorMode = EditorMode.FULL
-        editorLocked = false
+        editorLocked = event.isRecurring
+        if (event.isRecurring){originalDateRecurring = event.start}
     }
 
     fun showFullEditor(){
@@ -88,7 +96,7 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
         editorDraft = draft
     }
 
-    fun saveDraft(){
+    fun saveDraft(scope: EditScope){
         val draft = editorDraft ?: return
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
@@ -102,6 +110,16 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
                         repository.insertEvent(draft)
                     }
 
+                    scope == EditScope.THIS -> {
+                        if (originalDateRecurring != null) {
+                            repository.insertException(
+                                draft.id!!,
+                                originalDateRecurring ?: return@withContext,
+                                draft.allDay,
+                                draft
+                            )
+                        }
+                    }
                     else -> repository.updateEvent(draft)
                 }
             }
@@ -110,12 +128,21 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
         }
     }
 
-    fun deleteDraft(){
+    fun deleteDraft(scope: EditScope){
         val draft = editorDraft ?: return
         val draftId = draft.id ?: return
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
-                repository.deleteEvent(draftId)
+                if (scope == EditScope.ALL) {
+                    repository.deleteEvent(draft.id)
+                }else{
+                    repository.cancelInstance(
+                        draft.id,
+                        originalDateRecurring ?: return@withContext,
+                        draft.allDay
+                    )
+                }
+
             }
             closeEditor()
             loadEvents()

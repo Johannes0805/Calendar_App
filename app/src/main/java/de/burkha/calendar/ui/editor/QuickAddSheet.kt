@@ -63,7 +63,7 @@ import java.util.Locale
  * @param calendars      Kalender, in die man schreiben darf
  * @param onDraftChange  der Entwurf hat sich geändert (Titel getippt, Tag gewählt, ...)
  * @param onSave         "Speichern" gedrückt
- * @param onMoreDetails  "Ort, Notiz, ganztägig …" gedrückt -> hier soll der große Editor aufgehen
+ * @param onMoreDetails  "Ort, Notiz, Wiederholung …" gedrückt -> hier soll der große Editor aufgehen
  * @param onDismiss      Sheet wurde weggewischt oder daneben getippt
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -220,7 +220,7 @@ fun QuickAddContent(
         }
 
         TextButton(onClick = onMoreDetails) {
-            Text("Ort, Notiz, ganztägig …", fontWeight = FontWeight.Bold)
+            Text("Ort, Notiz, Wiederholung …", fontWeight = FontWeight.Bold)
         }
 
         Button(

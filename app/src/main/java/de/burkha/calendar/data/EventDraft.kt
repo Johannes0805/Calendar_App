@@ -16,6 +16,9 @@ import java.time.LocalTime
  *
  * @param id     null = neuer Termin, sonst die Event-ID des Termins, der bearbeitet wird
  * @param end    bei ganztägigen Terminen der FOLGETAG um 00:00 (so speichert Android das auch)
+ * @param recurrence  ob und wie sich der Termin wiederholt. start/end beschreiben dann den ERSTEN Termin.
+ * @param recurrenceEnd  letzter Tag, an dem die Serie noch stattfinden darf (inklusive). null = endet nie.
+ *                       Spielt nur eine Rolle, wenn recurrence nicht NONE ist.
  */
 data class EventDraft(
     val id: Long? = null,
@@ -26,6 +29,8 @@ data class EventDraft(
     val allDay: Boolean = false,
     val location: String = "",
     val note: String = "",
+    val recurrence: Recurrence = Recurrence.NONE,
+    val recurrenceEnd: LocalDate? = null,
 ) {
     val isNew: Boolean get() = id == null
     val duration: Duration get() = Duration.between(start, end)
