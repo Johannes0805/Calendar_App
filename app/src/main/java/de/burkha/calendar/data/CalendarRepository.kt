@@ -183,7 +183,7 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
     // Helfer für insert und update
     private fun toContentValues(draft: EventDraft): ContentValues {
 
-        val values: ContentValues = ContentValues()
+        val values = ContentValues()
 
         if (draft.recurrence == Recurrence.NONE){
             values.put(CalendarContract.Events.DTEND, toMillis(draft.allDay, draft.end))
@@ -193,11 +193,11 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
             values.put(
                 CalendarContract.Events.RRULE,
                 when (draft.recurrence){
-                    Recurrence.DAILY -> "DAILY"
-                    Recurrence.WEEKLY -> "WEEKLY"
-                    Recurrence.MONTHLY -> "MONTHLY"
-                    Recurrence.YEARLY -> "YEARLY"
-                    else -> ""
+                    Recurrence.DAILY -> "FREQ=DAILY"
+                    Recurrence.WEEKLY -> "FREQ=WEEKLY"
+                    Recurrence.MONTHLY -> "FREQ=MONTHLY"
+                    Recurrence.YEARLY -> "FREQ=YEARLY"
+                    Recurrence.NONE -> null
                 }
             )
             values.put(CalendarContract.Events.DURATION,
@@ -222,4 +222,3 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
         return values
     }
 }
-
