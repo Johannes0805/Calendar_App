@@ -62,7 +62,8 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
             CalendarContract.Instances.DISPLAY_COLOR,
             CalendarContract.Instances.DESCRIPTION,
             CalendarContract.Instances.RRULE,
-            CalendarContract.Instances.ORIGINAL_ID
+            CalendarContract.Instances.ORIGINAL_ID,
+            CalendarContract.Instances.DTSTART
         )
 
         val beginWindow: Long = from.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -78,28 +79,14 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
         cursor?.use{ c ->
             while(c.moveToNext()){
 
-
                 val allDay = c.getInt(5) == 1
-                val start: LocalDateTime
-                val end: LocalDateTime
 
-                if(allDay){
-                    start = Instant.ofEpochMilli(c.getLong(3))
-                        .atZone(ZoneOffset.UTC)
-                        .toLocalDateTime()
-                    end = Instant.ofEpochMilli(c.getLong(4))
-                        .atZone(ZoneOffset.UTC)
-                        .toLocalDateTime()
-                }else{
-                    start = Instant.ofEpochMilli(c.getLong(3))
-                        .atZone(systemDefault())
-                        .toLocalDateTime()
-                    end = Instant.ofEpochMilli(c.getLong(4))
-                        .atZone(systemDefault())
-                        .toLocalDateTime()
-                }
+                val start: LocalDateTime = toLocalDateTime(allDay, c.getLong(3))
+                val end: LocalDateTime = toLocalDateTime(allDay, c.getLong(4))
 
                 val recurring: Boolean = !c.getString(9).isNullOrBlank() || !c.getString(10).isNullOrBlank()
+
+                val seriesStart: LocalDateTime? = if (recurring) toLocalDateTime(allDay, c.getLong(11)) else start
 
                 result.add(
                     CalendarEvent(
@@ -112,7 +99,8 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
                         if (c.getString(6).isNullOrBlank()){null} else {c.getString(6)},
                         c.getInt(7),
                         if (c.getString(8).isNullOrBlank()) {null} else {c.getString(8)},
-                        recurring
+                        recurring,
+                        seriesStart
                     )
                 )
             }
@@ -148,6 +136,7 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
         contentResolver.delete(uri, null)
     }
 
+    // Used if only one event of a recurring one is changed
     fun insertException(seriesId: Long, originalStart: LocalDateTime, allDay: Boolean, draft: EventDraft): Boolean{
         val values = toContentValues(draft)
         values.remove(CalendarContract.Events.DTEND)
@@ -166,6 +155,7 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
         return result != null
     }
 
+    // Used if an event of a recurring one gets deleted
     fun cancelInstance(seriesId: Long, originalStart: LocalDateTime, allDay: Boolean): Boolean{
         val values = ContentValues()
 
@@ -178,6 +168,40 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, seriesId)
         val result = contentResolver.insert(uri, values)
         return result != null
+    }
+
+    // Used if all events of a recurring one are changed
+    fun updateSeries(seriesId: Long, newSeriesStart: LocalDateTime, draft: EventDraft): Boolean{
+        val values = toContentValues(draft)
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, seriesId)
+        val proj = arrayOf(CalendarContract.Instances.RRULE)
+
+        // RRULE needs to be set again, can not be removed as it would
+        val c2 = contentResolver.query(uri, proj, null, null)
+
+        c2?.use {
+            if (!c2.moveToFirst()) return false
+            values.put(
+                CalendarContract.Events.RRULE,
+                c2.getString(0))
+        }
+
+        //values.remove(CalendarContract.Events.RRULE)
+        // Need to be removed in order for android to accept the change of a recurring event
+        values.putNull(CalendarContract.Events.DTEND)
+        values.remove(CalendarContract.Events.CALENDAR_ID)
+
+        values.put(CalendarContract.Events.DURATION,
+            if (!draft.allDay){
+                "P${draft.duration.seconds}S"
+            }else{
+                "P${draft.duration.toDays()}D"
+            }
+        )
+        values.put(CalendarContract.Events.DTSTART, toMillis(draft.allDay, newSeriesStart))
+
+        val result = contentResolver.update(uri, values, null, null)
+        return result == 1
     }
 
     // Helfer für insert und update

@@ -1,9 +1,9 @@
 package de.burkha.calendar.ui
 
+import android.util.Log
 import de.burkha.calendar.data.EventDraft
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.Duration
 
 enum class EditorMode { QUICK, FULL }
 
@@ -49,6 +50,9 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
     // Needed in case an existing Event changes Calendar
     var originalCalendarId: Long? = null
 
+    var seriesStart: LocalDateTime? = null
+        private set
+
     init {
         loadEvents()
         loadCalendars()
@@ -70,6 +74,7 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
         editorDraft = EventDraft.newEvent(selectedDate, writableCalendars.firstOrNull()?.id)
         editorMode = EditorMode.QUICK
         editorLocked = false
+        seriesStart = null
     }
 
     fun openEvent(event: CalendarEvent){
@@ -85,7 +90,8 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             note = if(event.description != null) event.description!! else "")
         editorMode = EditorMode.FULL
         editorLocked = event.isRecurring
-        if (event.isRecurring){originalDateRecurring = event.start}
+        originalDateRecurring = if (event.isRecurring) event.start else null
+        seriesStart = event.seriesStart
     }
 
     fun showFullEditor(){
@@ -104,12 +110,7 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
                     draft.isNew -> {
                         repository.insertEvent(draft)
                     }
-
-                    draft.calendarId != originalCalendarId -> {
-                        repository.deleteEvent(draft.id!!)
-                        repository.insertEvent(draft)
-                    }
-
+                    // User changed a single event of a recurring row
                     scope == EditScope.THIS -> {
                         if (originalDateRecurring != null) {
                             repository.insertException(
@@ -119,6 +120,20 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
                                 draft
                             )
                         }
+                    }
+                    // User changed all events of a recurring row
+                    scope == EditScope.ALL && (originalDateRecurring != null) -> {
+                        val shift = Duration.between(originalDateRecurring, draft.start)
+                        repository.updateSeries(
+                            draft.id ?: return@withContext,
+                            seriesStart!! + shift,
+                            draft
+                        )
+                    }
+                    // User changed the Calendar of the event
+                    draft.calendarId != originalCalendarId -> {
+                        repository.deleteEvent(draft.id!!)
+                        repository.insertEvent(draft)
                     }
                     else -> repository.updateEvent(draft)
                 }
@@ -142,7 +157,6 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
                         draft.allDay
                     )
                 }
-
             }
             closeEditor()
             loadEvents()
@@ -150,8 +164,11 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
     }
 
     fun closeEditor(){
+        // Reset
         editorDraft = null
         originalCalendarId = null
+        seriesStart = null
+        originalDateRecurring = null
     }
 
     private fun loadCalendars(){
@@ -172,13 +189,13 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             from = selectedDate
             to = selectedDate
         }else if(currentView == CalendarView.WEEK){
-            var dayOfWeek= selectedDate.dayOfWeek.value.toLong()
+            val dayOfWeek= selectedDate.dayOfWeek.value.toLong()
             from = selectedDate.minusDays(dayOfWeek)
             to = selectedDate.plusDays(7 - dayOfWeek)
         }else{
-            var dayofMonth = selectedDate.dayOfMonth.toLong()
-            from = selectedDate.minusDays(dayofMonth - 1)
-            to = selectedDate.plusDays(selectedDate.lengthOfMonth() - dayofMonth)
+            val dayOfMonth = selectedDate.dayOfMonth.toLong()
+            from = selectedDate.minusDays(dayOfMonth - 1)
+            to = selectedDate.plusDays(selectedDate.lengthOfMonth() - dayOfMonth)
         }
 
         viewModelScope.launch {

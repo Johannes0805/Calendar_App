@@ -12,6 +12,7 @@ data class CalendarEvent(
     var location: String? = null,
     var color: Int,
     var description: String? = null,
-    var isRecurring: Boolean = false
+    var isRecurring: Boolean = false,
+    var seriesStart: LocalDateTime? = null
 )
 

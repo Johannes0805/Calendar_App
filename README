@@ -2,7 +2,7 @@
 
 ## WIP
 
-- Lock recurring Events for editing
+- Fix bug: When editing a single event of a recurring row and afterwards edtiting the whole row by this element, only this element will change
 
 ## TODO
 
