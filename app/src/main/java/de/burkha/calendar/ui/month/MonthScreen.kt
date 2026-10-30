@@ -8,23 +8,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +44,7 @@ import de.burkha.calendar.ui.components.CalendarHeader
 import de.burkha.calendar.ui.components.DaySheet
 import de.burkha.calendar.ui.components.PlusIcon
 import de.burkha.calendar.ui.components.StatTile
+import de.burkha.calendar.ui.components.swipeToNavigate
 import de.burkha.calendar.ui.components.overlapsDay
 import de.burkha.calendar.ui.components.plannedMinutes
 import de.burkha.calendar.ui.theme.CalendarTheme
@@ -93,16 +90,18 @@ fun MonthScreen(
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     // Hintergrund in der Farbe des Blatts unten: so geht das Blatt nahtlos bis zum Bildschirmrand.
+    // Pfeile oben und Wischen machen dasselbe
+    val goPrevious = { onSelectDate(selectedDate.minusMonths(1)) }
+    val goNext = { onSelectDate(selectedDate.plusMonths(1)) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .swipeToNavigate(selectedDate, onPrevious = goPrevious, onNext = goNext)
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
+        // Nur der Zeitstrahl unten scrollt. Alles darüber bleibt stehen.
+        Column(modifier = Modifier.fillMaxSize()) {
             // Oberer Teil in der normalen Hintergrundfarbe
             Column(
                 modifier = Modifier
@@ -111,8 +110,8 @@ fun MonthScreen(
             ) {
                 CalendarHeader(
                     date = selectedDate,
-                    onPrevious = { onSelectDate(selectedDate.minusMonths(1)) },
-                    onNext = { onSelectDate(selectedDate.plusMonths(1)) },
+                    onPrevious = goPrevious,
+                    onNext = goNext,
                     previousLabel = "Vorheriger Monat",
                     nextLabel = "Nächster Monat",
                     action = viewSwitcher,
@@ -138,10 +137,11 @@ fun MonthScreen(
                 events = events,
                 onEventClick = onEventClick,
                 now = now,
+                scrollable = true,
+                // Platz, damit der Plus-Button den letzten Termin nicht verdeckt
+                timelineBottomPadding = 80.dp + navBarBottom,
+                modifier = Modifier.weight(1f),
             )
-
-            // Platz, damit der Plus-Button nichts verdeckt
-            Spacer(modifier = Modifier.height(96.dp + navBarBottom))
         }
 
         FloatingActionButton(

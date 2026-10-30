@@ -20,10 +20,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +47,7 @@ import de.burkha.calendar.ui.components.CalendarHeader
 import de.burkha.calendar.ui.components.DaySheet
 import de.burkha.calendar.ui.components.PlusIcon
 import de.burkha.calendar.ui.components.StatTile
+import de.burkha.calendar.ui.components.swipeToNavigate
 import de.burkha.calendar.ui.components.formatHours
 import de.burkha.calendar.ui.components.nowColor
 import de.burkha.calendar.ui.components.overlapsDay
@@ -94,16 +93,18 @@ fun WeekScreen(
     val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     // Gleicher Aufbau wie im Monat: Hintergrund = Farbe des Blatts unten
+    // Pfeile oben und Wischen machen dasselbe
+    val goPrevious = { onSelectDate(selectedDate.minusWeeks(1)) }
+    val goNext = { onSelectDate(selectedDate.plusWeeks(1)) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .swipeToNavigate(selectedDate, onPrevious = goPrevious, onNext = goNext)
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-        ) {
+        // Nur der Zeitstrahl unten scrollt. Alles darüber bleibt stehen.
+        Column(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .background(MaterialTheme.colorScheme.surface)
@@ -111,8 +112,8 @@ fun WeekScreen(
             ) {
                 CalendarHeader(
                     date = selectedDate,
-                    onPrevious = { onSelectDate(selectedDate.minusWeeks(1)) },
-                    onNext = { onSelectDate(selectedDate.plusWeeks(1)) },
+                    onPrevious = goPrevious,
+                    onNext = goNext,
                     previousLabel = "Vorherige Woche",
                     nextLabel = "Nächste Woche",
                     action = viewSwitcher,
@@ -145,9 +146,11 @@ fun WeekScreen(
                 events = events,
                 onEventClick = onEventClick,
                 now = now,
+                scrollable = true,
+                // Platz, damit der Plus-Button den letzten Termin nicht verdeckt
+                timelineBottomPadding = 80.dp + navBarBottom,
+                modifier = Modifier.weight(1f),
             )
-
-            Spacer(modifier = Modifier.height(96.dp + navBarBottom))
         }
 
         FloatingActionButton(

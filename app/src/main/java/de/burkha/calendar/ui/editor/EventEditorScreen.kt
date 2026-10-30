@@ -25,16 +25,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -64,7 +60,12 @@ import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.data.CalendarInfo
 import de.burkha.calendar.data.EventDraft
 import de.burkha.calendar.data.Recurrence
+import de.burkha.calendar.ui.components.AppConfirmDialog
+import de.burkha.calendar.ui.components.AppDialog
+import de.burkha.calendar.ui.components.AppMenu
+import de.burkha.calendar.ui.components.ChoiceIcon
 import de.burkha.calendar.ui.components.DaySheet
+import de.burkha.calendar.ui.components.DialogChoice
 import de.burkha.calendar.ui.components.TIME_FORMAT
 import de.burkha.calendar.ui.theme.CalendarTheme
 import java.time.LocalDate
@@ -239,9 +240,9 @@ fun EventEditorScreen(
                                 enabled = enabled,
                                 onClick = { showRecurrenceMenu = true },
                             )
-                            DropdownMenu(
+                            AppMenu(
                                 expanded = showRecurrenceMenu,
-                                onDismissRequest = { showRecurrenceMenu = false },
+                                onDismiss = { showRecurrenceMenu = false },
                             ) {
                                 // entries = alle Werte des enums, in der Reihenfolge, in der sie dort stehen
                                 Recurrence.entries.forEach { option ->
@@ -275,9 +276,9 @@ fun EventEditorScreen(
                                     enabled = enabled,
                                     onClick = { showRecurrenceEndMenu = true },
                                 )
-                                DropdownMenu(
+                                AppMenu(
                                     expanded = showRecurrenceEndMenu,
-                                    onDismissRequest = { showRecurrenceEndMenu = false },
+                                    onDismiss = { showRecurrenceEndMenu = false },
                                 ) {
                                     DropdownMenuItem(
                                         text = { Text("nie") },
@@ -401,7 +402,9 @@ fun EventEditorScreen(
         ScopeDialog(
             title = "Wiederholenden Termin ändern",
             thisLabel = "Nur diesen Termin",
+            thisHint = "Die anderen Termine bleiben, wie sie sind",
             allLabel = "Alle Termine der Serie",
+            allHint = "Die Änderung gilt für die ganze Serie",
             destructive = false,
             onPick = { scope ->
                 showSaveScope = false
@@ -414,7 +417,9 @@ fun EventEditorScreen(
         ScopeDialog(
             title = "Wiederholenden Termin löschen",
             thisLabel = "Nur diesen Termin",
-            allLabel = "Alle Termine der Serie",
+            thisHint = "Nur dieses eine Mal fällt er weg",
+            allLabel = "Die ganze Serie",
+            allHint = "Alle Termine der Serie werden gelöscht",
             destructive = true,
             onPick = { scope ->
                 showDeleteConfirm = false
@@ -423,20 +428,16 @@ fun EventEditorScreen(
             onDismiss = { showDeleteConfirm = false },
         )
     } else if (showDeleteConfirm && onDelete != null) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Termin löschen?") },
-            text = { Text("„${draft.title}“ wird auch auf deinem Server gelöscht.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        onDelete(EditScope.ALL)
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Löschen") }
+        AppConfirmDialog(
+            title = "Termin löschen?",
+            text = "„${draft.title}“ wird auch auf deinem Server gelöscht.",
+            confirmLabel = "Löschen",
+            destructive = true,
+            onConfirm = {
+                showDeleteConfirm = false
+                onDelete(EditScope.ALL)
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Abbrechen") } },
+            onDismiss = { showDeleteConfirm = false },
         )
     }
 }
@@ -446,8 +447,9 @@ fun EventEditorScreen(
 // ---------------------------------------------------------------------------
 
 /**
- * Die Frage "Nur diesen oder alle?". Zwei große Knöpfe untereinander statt der üblichen
- * kleinen Dialog-Knöpfe, damit man nicht aus Versehen den falschen trifft.
+ * Die Frage "Nur diesen oder alle?". Zwei große Kacheln statt der üblichen kleinen
+ * Dialog-Knöpfe, damit man nicht aus Versehen den falschen trifft.
+ * Ein Punkt im Symbol = ein Termin, drei Punkte = die ganze Serie.
  *
  * @param destructive  true = Löschen. Dann ist "alle" rot, weil man damit die ganze Serie verliert.
  */
@@ -455,35 +457,33 @@ fun EventEditorScreen(
 private fun ScopeDialog(
     title: String,
     thisLabel: String,
+    thisHint: String,
     allLabel: String,
+    allHint: String,
     destructive: Boolean,
     onPick: (EditScope) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(
-                    onClick = { onPick(EditScope.THIS) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(thisLabel) }
-                OutlinedButton(
-                    onClick = { onPick(EditScope.ALL) },
-                    colors = if (destructive) {
-                        ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    } else {
-                        ButtonDefaults.outlinedButtonColors()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(allLabel) }
-            }
-        },
-        // AlertDialog will einen confirmButton. Unsere "Bestätigung" sind die zwei Knöpfe oben,
-        // hier steht deshalb nur "Abbrechen".
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
-    )
+    AppDialog(
+        title = title,
+        onDismiss = onDismiss,
+        buttons = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    ) {
+        DialogChoice(
+            title = thisLabel,
+            subtitle = thisHint,
+            icon = ChoiceIcon.SINGLE,
+            emphasized = true,
+            onClick = { onPick(EditScope.THIS) },
+        )
+        DialogChoice(
+            title = allLabel,
+            subtitle = allHint,
+            icon = ChoiceIcon.SERIES,
+            destructive = destructive,
+            onClick = { onPick(EditScope.ALL) },
+        )
+    }
 }
 
 @Composable

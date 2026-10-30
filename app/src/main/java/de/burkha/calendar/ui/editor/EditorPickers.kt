@@ -6,12 +6,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
 import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -22,9 +22,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarInfo
+import de.burkha.calendar.ui.components.AppDialog
+import de.burkha.calendar.ui.components.AppMenu
+import de.burkha.calendar.ui.components.DialogShape
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -53,6 +57,9 @@ fun DatePickerDialogFor(
     )
     DatePickerDialog(
         onDismissRequest = onDismiss,
+        // Gleiche Rundung und Farbe wie die anderen Dialoge der App (siehe AppDialog.kt)
+        shape = DialogShape,
+        colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
         confirmButton = {
             TextButton(onClick = {
                 val millis = state.selectedDateMillis
@@ -64,7 +71,10 @@ fun DatePickerDialogFor(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
     ) {
-        DatePicker(state = state)
+        DatePicker(
+            state = state,
+            colors = DatePickerDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        )
     }
 }
 
@@ -77,17 +87,19 @@ fun TimePickerDialogFor(
     onDismiss: () -> Unit,
 ) {
     val state = rememberTimePickerState(initialHour = time.hour, initialMinute = time.minute, is24Hour = true)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
+    AppDialog(
+        title = "Uhrzeit wählen",
+        onDismiss = onDismiss,
+        buttons = {
+            TextButton(onClick = onDismiss) { Text("Abbrechen") }
             TextButton(onClick = {
                 onPick(LocalTime.of(state.hour, state.minute))
                 onDismiss()
-            }) { Text("OK") }
+            }) { Text("OK", fontWeight = FontWeight.Bold) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } },
-        text = { TimePicker(state = state) },
-    )
+    ) {
+        TimePicker(state = state, modifier = Modifier.align(Alignment.CenterHorizontally))
+    }
 }
 
 /** Aufklappmenü mit allen Kalendern. Hängt sich an das Element, in dem es steht. */
@@ -98,7 +110,7 @@ fun CalendarMenu(
     onPick: (CalendarInfo) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    AppMenu(expanded = expanded, onDismiss = onDismiss) {
         calendars.forEach { calendar ->
             DropdownMenuItem(
                 text = {

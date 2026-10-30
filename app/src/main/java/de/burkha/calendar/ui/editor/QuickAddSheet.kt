@@ -20,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +49,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import de.burkha.calendar.data.CalendarInfo
 import de.burkha.calendar.data.EventDraft
+import de.burkha.calendar.ui.components.AppConfirmDialog
 import de.burkha.calendar.ui.components.TIME_FORMAT
 import de.burkha.calendar.ui.theme.CalendarTheme
 import java.time.LocalDate
@@ -64,7 +67,9 @@ import java.util.Locale
  * @param onDraftChange  der Entwurf hat sich geändert (Titel getippt, Tag gewählt, ...)
  * @param onSave         "Speichern" gedrückt
  * @param onMoreDetails  "Ort, Notiz, Wiederholung …" gedrückt -> hier soll der große Editor aufgehen
- * @param onDismiss      Sheet wurde weggewischt oder daneben getippt
+ * @param onDismiss      Sheet wird geschlossen, ohne zu speichern. Ist schon ein Titel
+ *                       getippt, kommt vorher die Rückfrage "Entwurf verwerfen?". onDismiss
+ *                       wird dann erst bei "Verwerfen" aufgerufen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,10 +82,30 @@ fun QuickAddSheet(
     onDismiss: () -> Unit,
     today: LocalDate = LocalDate.now(),
 ) {
+    var showDiscardDialog by remember { mutableStateOf(false) }
+
+    // Der Sheet-State wird nur einmal erzeugt. Damit die Prüfung unten trotzdem den
+    // AKTUELLEN Titel sieht und nicht den vom ersten Öffnen, merken wir ihn so:
+    val currentDraft by rememberUpdatedState(draft)
+
+    val sheetState = rememberModalBottomSheetState(
+        // gleich ganz aufklappen, nicht erst halb
+        skipPartiallyExpanded = true,
+        // Wird gefragt, bevor das Sheet zugeht (Wischen, daneben tippen, Zurück-Geste).
+        // Mit Titel: nicht zugehen, sondern erst nachfragen. Ohne Titel geht nichts verloren.
+        confirmValueChange = { target ->
+            if (target == SheetValue.Hidden && currentDraft.title.isNotBlank()) {
+                showDiscardDialog = true
+                false
+            } else {
+                true
+            }
+        },
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        // skipPartiallyExpanded: gleich ganz aufklappen, nicht erst halb
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         QuickAddContent(
@@ -91,7 +116,31 @@ fun QuickAddSheet(
             onMoreDetails = onMoreDetails,
             today = today,
         )
+
+        if (showDiscardDialog) {
+            DiscardDraftDialog(
+                onDiscard = {
+                    showDiscardDialog = false
+                    onDismiss()
+                },
+                onKeepEditing = { showDiscardDialog = false },
+            )
+        }
     }
+}
+
+/** Rückfrage, bevor ein angefangener Termin verloren geht. */
+@Composable
+private fun DiscardDraftDialog(onDiscard: () -> Unit, onKeepEditing: () -> Unit) {
+    AppConfirmDialog(
+        title = "Entwurf verwerfen?",
+        text = "Der Termin wurde noch nicht gespeichert.",
+        confirmLabel = "Verwerfen",
+        dismissLabel = "Weiter bearbeiten",
+        destructive = true,
+        onConfirm = onDiscard,
+        onDismiss = onKeepEditing,
+    )
 }
 
 /**

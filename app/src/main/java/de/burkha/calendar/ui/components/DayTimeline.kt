@@ -2,6 +2,8 @@ package de.burkha.calendar.ui.components
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -112,6 +114,11 @@ fun DayTimeline(
  *
  * @param title             eigene Überschrift. null = "Mi, 14. Oktober"
  * @param highlightEventId  wird an DayTimeline weitergereicht
+  *
+ * @param scrollable  true: Nur der Zeitstrahl scrollt, die Überschrift bleibt stehen. Dafür muss
+ *                    das Blatt eine feste Höhe bekommen, z. B. Modifier.weight(1f) in einer Column.
+ *                    Nicht in etwas legen, das selbst scrollt, sonst stürzt Compose ab.
+ * @param timelineBottomPadding  Platz unter dem letzten Termin, z. B. damit der Plus-Button nichts verdeckt
  */
 @Composable
 fun DaySheet(
@@ -122,7 +129,12 @@ fun DaySheet(
     now: LocalDateTime = LocalDateTime.now(),
     title: String? = null,
     highlightEventId: Long? = null,
+    scrollable: Boolean = false,
+    timelineBottomPadding: Dp = 0.dp,
 ) {
+    // Beim Wechsel auf einen anderen Tag wieder oben anfangen
+    val scrollState = remember(date) { ScrollState(0) }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -148,6 +160,16 @@ fun DaySheet(
             onEventClick = onEventClick,
             now = now,
             highlightEventId = highlightEventId,
+            modifier = if (scrollable) {
+                // weight(1f): den restlichen Platz im Blatt nehmen, darin scrollen.
+                // Die Überschrift darüber bleibt dabei stehen.
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(scrollState)
+                    .padding(bottom = timelineBottomPadding)
+            } else {
+                Modifier.padding(bottom = timelineBottomPadding)
+            },
         )
     }
 }

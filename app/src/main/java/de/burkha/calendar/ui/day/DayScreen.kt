@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FloatingActionButton
@@ -29,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,6 +48,7 @@ import de.burkha.calendar.ui.components.DayTimeline
 import de.burkha.calendar.ui.components.PlusIcon
 import de.burkha.calendar.ui.components.TIME_FORMAT
 import de.burkha.calendar.ui.components.formatDuration
+import de.burkha.calendar.ui.components.swipeToNavigate
 import de.burkha.calendar.ui.theme.CalendarTheme
 import java.time.DayOfWeek
 import java.time.Duration
@@ -84,17 +87,22 @@ fun DayScreen(
     val today = now.toLocalDate()
     val isToday = selectedDate == today
 
+    // Pfeile oben und Wischen machen dasselbe
+    val goPrevious = { onSelectDate(selectedDate.minusDays(1)) }
+    val goNext = { onSelectDate(selectedDate.plusDays(1)) }
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .swipeToNavigate(selectedDate, onPrevious = goPrevious, onNext = goNext)
             .background(MaterialTheme.colorScheme.surface),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // statusBarsPadding: Abstand zur Statusleiste (Uhrzeit, Netz), weil die App edge-to-edge zeichnet.
             CalendarHeader(
                 date = selectedDate,
-                onPrevious = { onSelectDate(selectedDate.minusDays(1)) },
-                onNext = { onSelectDate(selectedDate.plusDays(1)) },
+                onPrevious = goPrevious,
+                onNext = goNext,
                 previousLabel = "Vorheriger Tag",
                 nextLabel = "Nächster Tag",
                 action = viewSwitcher,
@@ -109,34 +117,38 @@ fun DayScreen(
             ) {
                 // Unten Platz für den Plus-Button und die Navigationsleiste von Android
                 val navBarBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 12.dp, end = 20.dp, top = 20.dp, bottom = 104.dp + navBarBottom),
-                ) {
+                // Beim Wechsel auf einen anderen Tag wieder oben anfangen
+                val listState = remember(selectedDate) { LazyListState() }
+
+                // Überschrift und Fokus-Karte bleiben stehen, nur der Zeitstrahl darunter scrollt
+                Column {
                     // Das Datum steht hier statt oben im Kopf, genau wie in Woche und Monat
-                    item {
-                        DayHeading(
-                            date = selectedDate,
-                            events = events,
+                    DayHeading(
+                        date = selectedDate,
+                        events = events,
+                        now = now,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 16.dp),
+                    )
+                    if (isToday) {
+                        FocusCard(
+                            info = focusInfo(events, now),
                             now = now,
-                            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 20.dp),
                         )
                     }
-                    if (isToday) {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(start = 12.dp, end = 20.dp, bottom = 104.dp + navBarBottom),
+                        modifier = Modifier.weight(1f),
+                    ) {
                         item {
-                            FocusCard(
-                                info = focusInfo(events, now),
+                            DayTimeline(
+                                day = selectedDate,
+                                events = events,
+                                onEventClick = onEventClick,
                                 now = now,
-                                modifier = Modifier.padding(start = 8.dp, bottom = 20.dp),
                             )
                         }
-                    }
-                    item {
-                        DayTimeline(
-                            day = selectedDate,
-                            events = events,
-                            onEventClick = onEventClick,
-                            now = now,
-                        )
                     }
                 }
             }

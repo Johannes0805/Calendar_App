@@ -3,6 +3,7 @@ package de.burkha.calendar.ui.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -19,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -99,3 +101,39 @@ fun StatTile(value: String, label: String, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * Wischen nach links/rechts blättert zum nächsten/vorherigen Zeitraum, genau wie die Pfeile oben.
+ *
+ * Vertikales Scrollen funktioniert weiter: Die Geste greift erst, wenn der Finger
+ * eindeutig waagrecht losläuft. Ausgelöst wird beim Loslassen, wenn er weit genug gewandert ist.
+ *
+ * @param key         bei jeder Änderung wird die Geste neu aufgesetzt, damit onPrevious/onNext
+ *                    immer zum aktuellen Datum passen. Einfach das angezeigte Datum übergeben.
+ * @param onPrevious  nach rechts gewischt (wie der Pfeil nach links)
+ * @param onNext      nach links gewischt (wie der Pfeil nach rechts)
+ */
+fun Modifier.swipeToNavigate(
+    key: Any?,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+): Modifier = pointerInput(key) {
+    // So weit muss der Finger waagrecht wandern, damit geblättert wird
+    val threshold = SWIPE_THRESHOLD.toPx()
+    var total = 0f
+    detectHorizontalDragGestures(
+        onDragStart = { total = 0f },
+        onDragEnd = {
+            when {
+                total > threshold -> onPrevious()
+                total < -threshold -> onNext()
+            }
+        },
+        onHorizontalDrag = { change, dragAmount ->
+            change.consume()
+            total += dragAmount
+        },
+    )
+}
+
+private val SWIPE_THRESHOLD = 56.dp
