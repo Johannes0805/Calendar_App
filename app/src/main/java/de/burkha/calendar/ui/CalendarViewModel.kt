@@ -44,7 +44,10 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
     var writableCalendars by mutableStateOf<List<CalendarInfo>>(emptyList())
         private set
 
-    // Date of a recurring event bevor edited, if not edited originalDateRecurring == event.start
+    /** Start of a single event of a recurring event, if the recurring event was never edited
+     * originalDateRecurring == event.start
+     * If the event is not recurring originalDateRecurring is null
+     * */
     var originalDateRecurring: LocalDateTime? = null
 
     // Needed in case an existing Event changes Calendar
@@ -132,7 +135,9 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
                     }
                     // User changed the Calendar of the event
                     draft.calendarId != originalCalendarId -> {
+                        // Gets deleted from old calendar
                         repository.deleteEvent(draft.id!!)
+                        // Inserted into new calendar
                         repository.insertEvent(draft)
                     }
                     else -> repository.updateEvent(draft)
