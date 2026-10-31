@@ -89,6 +89,10 @@ import java.time.format.TextStyle as DateTextStyle
  * @param isRecurring  true = der Termin gehört zu einer Serie. Dann wird beim Speichern/Löschen
  *                     nachgefragt, und Kalender und Wiederholung lassen sich nicht ändern.
  * @param locked       true = alles nur zum Ansehen (z. B. für Kalender ohne Schreibrecht)
+ * @param isException  true = ein schon einzeln geänderter Termin einer Serie (Ausnahme).
+ *                     Dann wird beim Speichern NICHT nachgefragt, sondern immer nur dieser
+ *                     Termin gespeichert (onSave(EditScope.THIS)). Beim Löschen wird weiter gefragt.
+ *                     Nur zusammen mit isRecurring = true sinnvoll.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -104,6 +108,7 @@ fun EventEditorScreen(
     isRecurring: Boolean = false,
     locked: Boolean = false,
     now: LocalDateTime = LocalDateTime.now(),
+    isException: Boolean = false,
 ) {
     // Reiner UI-Zustand: welcher Dialog ist offen, ist das Notizfeld aufgeklappt
     var showDatePicker by remember { mutableStateOf(false) }
@@ -137,7 +142,14 @@ fun EventEditorScreen(
             canSave = enabled && draft.title.isNotBlank() && draft.calendarId != null,
             showSave = enabled,
             // Bei Serien erst fragen, sonst direkt speichern
-            onSave = { if (isRecurring) showSaveScope = true else onSave(EditScope.ALL) },
+            onSave = {
+                when {
+                    // Einzeln geändert: "Alle" gibt es hier nicht, also gar nicht erst fragen
+                    isException -> onSave(EditScope.THIS)
+                    isRecurring -> { showSaveScope = true }
+                    else -> onSave(EditScope.ALL)
+                }
+            },
             onClose = onClose,
         )
 
@@ -230,7 +242,7 @@ fun EventEditorScreen(
                     }
                     if (isRecurring) {
                         // Die Regel einer bestehenden Serie ändern wir (noch) nicht, nur Hinweis
-                        Word("gehört zu einer Serie")
+                        Word(if (isException) "einzeln geändert · gehört zu einer Serie" else "gehört zu einer Serie")
                     } else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         // "wiederholt sich jeden Mittwoch"
                         Word("wiederholt sich", Modifier.align(Alignment.CenterVertically))
@@ -703,6 +715,25 @@ private fun EventEditorRecurringPreview() {
             onClose = {},
             onDelete = {},
             isRecurring = true,
+            now = previewDay.atTime(11, 20),
+        )
+    }
+}
+
+@Preview(name = "Serie, einzeln geändert", showBackground = true, widthDp = 390, heightDp = 1000)
+@Composable
+private fun EventEditorExceptionPreview() {
+    CalendarTheme(dynamicColor = false) {
+        EventEditorScreen(
+            draft = previewDraft,
+            calendars = previewCalendars,
+            dayEvents = previewDayEvents,
+            onDraftChange = {},
+            onSave = {},
+            onClose = {},
+            onDelete = {},
+            isRecurring = true,
+            isException = true,
             now = previewDay.atTime(11, 20),
         )
     }

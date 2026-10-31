@@ -26,7 +26,19 @@ data class CalendarEvent(
     var description: String? = null,
     /** CalendarContract.Instances.RRULE */
     var isRecurring: Boolean = false,
-    /** CalendarContract.Instances.DTSTART */
-    var seriesStart: LocalDateTime? = null
+
+    /**
+     * If the event is not recurring -> null
+     * If the event is part of a series -> eventId
+     * If the event is an exception -> id of original recurring event
+     */
+    var seriesId: Long? = null,
+
+    /**
+     * If the event is not recurring -> null
+     * If the event is part of a series -> start
+     * If the event is an exception -> original start of the event
+     */
+    var originalStart: LocalDateTime? = null,
 )
 

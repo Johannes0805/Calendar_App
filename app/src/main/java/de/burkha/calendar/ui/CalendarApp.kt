@@ -1,7 +1,6 @@
 package de.burkha.calendar.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.viewmodel.compose.viewModel
 import de.burkha.calendar.data.CalendarRepository
 import de.burkha.calendar.ui.day.DayScreen
@@ -28,7 +27,8 @@ fun CalendarApp(repository: CalendarRepository){
             onSave = {x -> viewModel.saveDraft(x)},
             onClose = {viewModel.closeEditor()},
             onDelete = {x -> viewModel.deleteDraft(x)},
-            isRecurring = viewModel.editorLocked
+            isRecurring = viewModel.editorIsRecurring,
+            isException = viewModel.editorIsException
         )
     }else {
         when (viewModel.currentView) {

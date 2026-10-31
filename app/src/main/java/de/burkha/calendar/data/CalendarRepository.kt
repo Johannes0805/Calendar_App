@@ -10,6 +10,8 @@ import java.time.LocalDate
 import kotlin.collections.mutableListOf
 import java.time.LocalDateTime
 import java.time.ZoneId.systemDefault
+import java.time.Duration
+
 class CalendarRepository(private val contentResolver: ContentResolver) {
     /**
         Loads all available calendars from the android storage
@@ -55,18 +57,18 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
     fun getEvents(from: LocalDate, to: LocalDate): List<CalendarEvent>{
         // Determines in which order and what information for each event is fetched
         val projection = arrayOf(
-            CalendarContract.Instances.EVENT_ID,
-            CalendarContract.Instances.CALENDAR_ID,
-            CalendarContract.Instances.TITLE,
-            CalendarContract.Instances.BEGIN,
-            CalendarContract.Instances.END,
-            CalendarContract.Instances.ALL_DAY,
-            CalendarContract.Instances.EVENT_LOCATION,
-            CalendarContract.Instances.DISPLAY_COLOR,
-            CalendarContract.Instances.DESCRIPTION,
-            CalendarContract.Instances.RRULE,
-            CalendarContract.Instances.ORIGINAL_ID,
-            CalendarContract.Instances.DTSTART
+            CalendarContract.Instances.EVENT_ID,        // 0
+            CalendarContract.Instances.CALENDAR_ID,     // 1
+            CalendarContract.Instances.TITLE,           // 2
+            CalendarContract.Instances.BEGIN,           // 3
+            CalendarContract.Instances.END,             // 4
+            CalendarContract.Instances.ALL_DAY,         // 5
+            CalendarContract.Instances.EVENT_LOCATION,  // 6
+            CalendarContract.Instances.DISPLAY_COLOR,   // 7
+            CalendarContract.Instances.DESCRIPTION,     // 8
+            CalendarContract.Instances.RRULE,           // 9
+            CalendarContract.Instances.ORIGINAL_ID,     // 10
+            CalendarContract.Instances.ORIGINAL_INSTANCE_TIME, // 11
         )
 
         // Convert the Date to a certain time in millis for the query to work
@@ -82,32 +84,42 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
                 val start: LocalDateTime = toLocalDateTime(allDay, c.getLong(3))
                 val end: LocalDateTime = toLocalDateTime(allDay, c.getLong(4))
 
-                // Indicates whether an event is recurring by viewing RRULE and ORIGINAL_ID
-                val recurring: Boolean =  !c.getString(9).isNullOrBlank()||
-                            !c.getString(10).isNullOrBlank()
+                val originalId = c.getLong(10)
 
-                // Date of the first event in a series, if event is not part of a series it is set
-                // to the start of the event
-                val seriesStart: LocalDateTime? = if (recurring)
-                    toLocalDateTime(allDay, c.getLong(11)) else start
+                val isException: Boolean = !c.isNull(10)
+                val isSeries: Boolean = !c.getString(9).isNullOrBlank()
+
+                val originalStart: LocalDateTime? = when {
+                    isException -> toLocalDateTime(allDay, c.getLong(11))
+                    isSeries -> start
+                    else -> null
+                }
+
+                val seriesId: Long? = when {
+                    isException -> originalId
+                    isSeries -> c.getLong(0)
+                    else -> null
+                }
 
                 result.add(
                     CalendarEvent(
-                        c.getLong(0),
-                        c.getLong(1),
-                        c.getString(2) ?: "(Ohne Titel)",
-                        start,
-                        end,
-                        allDay,
-                        if (c.getString(6).isNullOrBlank()){null} else {c.getString(6)},
-                        c.getInt(7),
-                        if (c.getString(8).isNullOrBlank()) {null} else {c.getString(8)},
-                        recurring,
-                        seriesStart
+                        id =c.getLong(0),
+                        calendarId = c.getLong(1),
+                        title = c.getString(2) ?: "(Ohne Titel)",
+                        start = start,
+                        end = end,
+                        allDay = allDay,
+                        location = if (c.getString(6).isNullOrBlank()){null} else
+                        {c.getString(6)},
+                        color = c.getInt(7),
+                        description = if (c.getString(8).isNullOrBlank()) {null} else
+                        {c.getString(8)},
+                        isRecurring = seriesId != null,
+                        seriesId = seriesId,
+                        originalStart = originalStart
                     )
                 )
             }
-
         }
         return result
             .filter { it.end > toLocalDateTime(false, beginWindow) &&
@@ -185,6 +197,29 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
     }
 
     /**
+     *  Saves changes on an existing exception
+     *
+     *  @return true if updated successfully, false if not
+     */
+    fun updateException(draft: EventDraft) : Boolean{
+            val values = toContentValues(draft)
+            values.remove(CalendarContract.Events.CALENDAR_ID)
+            values.putNull(CalendarContract.Events.DURATION)
+            val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, draft.id!!)
+            return contentResolver.update(uri, values, null, null) == 1
+    }
+
+
+    fun cancelException(draft: EventDraft) : Boolean{
+        val values = toContentValues(draft)
+        values.remove(CalendarContract.Events.CALENDAR_ID)
+        values.putNull(CalendarContract.Events.DURATION)
+        values.put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CANCELED)
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, draft.id!!)
+        return contentResolver.update(uri, values, null, null) == 1
+    }
+
+    /**
      * Deletes a single event of a recurring series
      *
      * @return true if the event is canceled, false if not
@@ -204,30 +239,37 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
      *
      * @return true if the change was successfully, false if not
      */
-    fun updateSeries(seriesId: Long, newSeriesStart: LocalDateTime, draft: EventDraft): Boolean{
+    fun updateSeries(seriesId: Long, shift: Duration, draft: EventDraft): Boolean{
         val values = toContentValues(draft)
         // Create URI for the series
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, seriesId)
 
-        val proj = arrayOf(CalendarContract.Instances.RRULE)
+        val proj = arrayOf(
+            CalendarContract.Events.RRULE,
+            CalendarContract.Events.DTSTART
+        )
 
         // Get the RRULE of the series as it is not specified in the draft
         val c2 = contentResolver.query(uri, proj, null, null)
 
         c2?.use {
             // If there is a RRULE, put it to values else return
-            if (!c2.moveToFirst()) return false
+            if (!c2.moveToFirst() || c2.isNull(1)) return false
+            val rrule = c2.getString(0) ?: return false
+
             values.put(
                 CalendarContract.Events.RRULE,
-                c2.getString(0))
-        }
+                rrule)
+            values.put(CalendarContract.Events.DTSTART, toMillis(draft.allDay,
+                toLocalDateTime(draft.allDay,c2.getLong(1)) + shift))
+        } ?: return false
 
 
         // Need to be removed in order for android to accept the change of a recurring event
         values.putNull(CalendarContract.Events.DTEND)
         values.remove(CalendarContract.Events.CALENDAR_ID)
         // Set new start of events of the series
-        values.put(CalendarContract.Events.DTSTART, toMillis(draft.allDay, newSeriesStart))
+
         // Set end of the events of the series
         values.put(CalendarContract.Events.DURATION,
             if (!draft.allDay){
