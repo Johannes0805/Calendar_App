@@ -61,7 +61,7 @@ Because of this, it also works with any other calendar account Android already s
 
 1. Clone the repository:
    ```bash
-   git clone <repository-url>
+   git clone <github.com/Johannes0805/Calendar_App>
    ```
 2. Open the project in Android Studio and let Gradle sync.
 3. Connect a device (or start an emulator) and press **Run ▶**.
@@ -119,7 +119,7 @@ app/src/main/java/de/burkha/calendar/
 
 ## About
 
-A personal project by Johannes Burkhardt. The UI was designed with [Claude](https://claude.ai); the app logic is written by me.
+The UI was designed with Claude, the app logic is written by me written by me.
 
 ## License
 
