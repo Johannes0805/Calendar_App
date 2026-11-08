@@ -11,6 +11,10 @@ import kotlin.collections.mutableListOf
 import java.time.LocalDateTime
 import java.time.ZoneId.systemDefault
 import java.time.Duration
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+
 
 class CalendarRepository(private val contentResolver: ContentResolver) {
     /**
@@ -256,7 +260,6 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
             // If there is a RRULE, put it to values else return
             if (!c2.moveToFirst() || c2.isNull(1)) return false
             val rrule = c2.getString(0) ?: return false
-
             values.put(
                 CalendarContract.Events.RRULE,
                 rrule)
@@ -296,14 +299,27 @@ class CalendarRepository(private val contentResolver: ContentResolver) {
             values.putNull(CalendarContract.Events.DURATION)
         // Event is recurring
         } else{
+            var until = ""
+            if (draft.recurrenceEnd != null){
+                if (draft.allDay){
+                    val form = DateTimeFormatter.ofPattern("yyyyMMdd")
+                    until = ";UNTIL=" + draft.recurrenceEnd.format(form)
+                }else{
+                    val form = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+                    until = ";UNTIL=" + draft.recurrenceEnd.atTime(23,59,59
+                    ).atZone(systemDefault()).withZoneSameInstant(ZoneOffset.UTC).format(form)
+                }
+
+            }
+
             values.put(
                 CalendarContract.Events.RRULE,
                 when (draft.recurrence){
-                    Recurrence.DAILY -> "FREQ=DAILY"
-                    Recurrence.WEEKLY -> "FREQ=WEEKLY"
-                    Recurrence.MONTHLY -> "FREQ=MONTHLY"
-                    Recurrence.YEARLY -> "FREQ=YEARLY"
                     Recurrence.NONE -> null
+                    Recurrence.DAILY -> "FREQ=DAILY$until"
+                    Recurrence.WEEKLY -> "FREQ=WEEKLY$until"
+                    Recurrence.MONTHLY -> "FREQ=MONTHLY$until"
+                    Recurrence.YEARLY -> "FREQ=YEARLY$until"
                 }
             )
             values.put(CalendarContract.Events.DURATION,
