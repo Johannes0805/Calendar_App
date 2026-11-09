@@ -18,7 +18,7 @@ import androidx.core.content.ContextCompat
 
 private val CALENDAR_PERMISSIONS = arrayOf(
     Manifest.permission.READ_CALENDAR,
-    Manifest.permission.WRITE_CALENDAR,
+    Manifest.permission.WRITE_CALENDAR
 )
 
 @Composable
