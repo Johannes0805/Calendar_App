@@ -466,7 +466,7 @@ fun EventEditorScreen(
  * @param destructive  true = Löschen. Dann ist "alle" rot, weil man damit die ganze Serie verliert.
  */
 @Composable
-private fun ScopeDialog(
+internal fun ScopeDialog(
     title: String,
     thisLabel: String,
     thisHint: String,

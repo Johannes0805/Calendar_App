@@ -5,6 +5,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import de.burkha.calendar.data.CalendarRepository
 import de.burkha.calendar.ui.day.DayScreen
 import de.burkha.calendar.ui.editor.EditScope
+import de.burkha.calendar.ui.editor.EventDetailSheet
 import de.burkha.calendar.ui.editor.EventEditorScreen
 import de.burkha.calendar.ui.editor.QuickAddSheet
 import de.burkha.calendar.ui.month.MonthScreen
@@ -59,14 +60,26 @@ fun CalendarApp(repository: CalendarRepository){
                 viewSwitcher = switcher
             )
         }
-        if (draft != null) {
+        if (draft != null && viewModel.editorMode == EditorMode.QUICK) {
             QuickAddSheet(
                 draft,
                 viewModel.writableCalendars,
-                {x -> viewModel.updateDraft(x) },
-                {viewModel.saveDraft(EditScope.ALL)},
-                { viewModel.showFullEditor() },
-                { viewModel.closeEditor() }
+                onDraftChange = {x -> viewModel.updateDraft(x) },
+                onSave = {viewModel.saveDraft(EditScope.ALL)},
+                onMoreDetails = { viewModel.showFullEditor() },
+                onDismiss = { viewModel.closeEditor() }
+            )
+        }
+        if (draft != null && viewModel.editorMode == EditorMode.DETAIL){
+            EventDetailSheet(
+                draft = draft,
+                calendars = viewModel.allCalendars,
+                onEdit = {viewModel.editEvent()},
+                onDelete = {x -> viewModel.deleteDraft(x)},
+                onDismiss = {viewModel.closeEditor()},
+                onDuplicate = {viewModel.duplicateDraft()},
+                isRecurring = viewModel.editorIsRecurring,
+                isException = viewModel.editorIsException
             )
         }
     }

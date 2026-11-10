@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.data.CalendarInfo
 import de.burkha.calendar.data.CalendarRepository
+import de.burkha.calendar.data.Recurrence
 import de.burkha.calendar.ui.editor.EditScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -17,7 +18,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Duration
 
-enum class EditorMode { QUICK, FULL }
+enum class EditorMode { QUICK, FULL, DETAIL }
 
 class CalendarViewModel(private val repository: CalendarRepository) : ViewModel() {
 
@@ -42,6 +43,9 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
     var writableCalendars by mutableStateOf<List<CalendarInfo>>(emptyList())
         private set
 
+    var allCalendars by mutableStateOf<List<CalendarInfo>>(emptyList())
+        private set
+
     /**
      * Needed in case an existing event changes Calendar
      */
@@ -62,7 +66,8 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
 
     init {
         loadEvents()
-        loadCalendars()
+        loadWritableCalendars()
+        loadAllCalendars()
     }
 
     fun selectDate(date: LocalDate) {
@@ -86,8 +91,22 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
         seriesId = null
     }
 
-    fun openEvent(event: CalendarEvent){
+    /**
+     * Copies a selected event to the editor
+     * If the event is part of a series, this information is just ignored
+     */
+    fun duplicateDraft(){
+        editorDraft = editorDraft?.copy(id = null)
+        editorIsException = false
+        editorIsRecurring = false
+        seriesId = null
+        originalCalendarId = null
+        originalDateRecurring = null
+        editEvent()
+    }
 
+
+    fun openEvent(event: CalendarEvent){
         originalCalendarId = event.calendarId
         editorDraft = EventDraft(
             id = event.id,
@@ -98,11 +117,18 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
             allDay = event.allDay,
             location = event.location ?: "",
             note = event.description ?: "")
-        editorMode = EditorMode.FULL
+        editorMode = EditorMode.DETAIL
         editorIsRecurring = event.isRecurring
         originalDateRecurring = event.originalStart
         seriesId = event.seriesId
         editorIsException = editorIsRecurring && (seriesId != event.id)
+    }
+
+    /**
+     * Only used to switch into editor mode when in detail view
+     */
+    fun editEvent(){
+        editorMode = EditorMode.FULL
     }
 
     fun showFullEditor(){
@@ -193,12 +219,21 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
         editorIsException = false
     }
 
-    private fun loadCalendars(){
+    private fun loadWritableCalendars(){
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 repository.getCalendars().filter{it.canWrite}
             }
             writableCalendars = result
+        }
+    }
+
+    private fun loadAllCalendars(){
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                repository.getCalendars()
+            }
+            allCalendars = result
         }
     }
 

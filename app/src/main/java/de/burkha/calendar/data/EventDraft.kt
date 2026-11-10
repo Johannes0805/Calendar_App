@@ -21,6 +21,7 @@ import java.time.LocalTime
  *                       Spielt nur eine Rolle, wenn recurrence nicht NONE ist.
  */
 data class EventDraft(
+
     val id: Long? = null,
     val calendarId: Long? = null,
     val title: String = "",
