@@ -105,7 +105,7 @@ app/src/main/java/de/burkha/calendar/
 - [x] Create, edit and delete events
 - [x] Recurring events with end date, single-occurrence edits
 - [ ] Settings: start view, theme, visible calendars, default calendar and duration
-- [ ] Event detail view (open an event without editing it)
+- [x ] Event detail view (open an event without editing it)
 - [ ] Reminders and notifications
 - [ ] Home screen widget
 - [ ] First-start introduction
@@ -119,7 +119,7 @@ app/src/main/java/de/burkha/calendar/
 
 ## About
 
-The UI was designed with Claude, the app logic is written by me written by me.
+The UI was designed with Claude, the app logic is written by me. me.
 
 ## License
 
