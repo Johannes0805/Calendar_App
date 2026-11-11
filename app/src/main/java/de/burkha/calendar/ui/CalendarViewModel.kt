@@ -9,7 +9,6 @@ import androidx.lifecycle.viewModelScope
 import de.burkha.calendar.data.CalendarEvent
 import de.burkha.calendar.data.CalendarInfo
 import de.burkha.calendar.data.CalendarRepository
-import de.burkha.calendar.data.Recurrence
 import de.burkha.calendar.ui.editor.EditScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -65,9 +64,13 @@ class CalendarViewModel(private val repository: CalendarRepository) : ViewModel(
         private set
 
     init {
-        loadEvents()
-        loadWritableCalendars()
+        reload()
+    }
+
+    fun reload(){
         loadAllCalendars()
+        loadWritableCalendars()
+        loadEvents()
     }
 
     fun selectDate(date: LocalDate) {

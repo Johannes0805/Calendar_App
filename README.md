@@ -109,7 +109,7 @@ app/src/main/java/de/burkha/calendar/
 - [ ] Reminders and notifications
 - [ ] Home screen widget
 - [ ] First-start introduction
-- [ ] Refresh automatically when the app comes back to the foreground
+- [x ] Refresh automatically when the app comes back to the foreground
 
 ## Known limitations
 
