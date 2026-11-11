@@ -105,11 +105,11 @@ app/src/main/java/de/burkha/calendar/
 - [x] Create, edit and delete events
 - [x] Recurring events with end date, single-occurrence edits
 - [ ] Settings: start view, theme, visible calendars, default calendar and duration
-- [x ] Event detail view (open an event without editing it)
+- [x] Event detail view (open an event without editing it)
 - [ ] Reminders and notifications
 - [ ] Home screen widget
 - [ ] First-start introduction
-- [x ] Refresh automatically when the app comes back to the foreground
+- [x] Refresh automatically when the app comes back to the foreground
 
 ## Known limitations
 
